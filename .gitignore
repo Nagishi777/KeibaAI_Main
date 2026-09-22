@@ -1,0 +1,6 @@
+.env
+*.sqlite3
+logs/
+traces/
+screenshots/
+

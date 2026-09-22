@@ -1,0 +1,20 @@
+# 対応Python: 3.11 - 3.13
+# インストール後、発走時刻取得用のブラウザを別途導入すること:
+#   python -m playwright install chromium
+
+# Common
+matplotlib==3.9.0 
+
+# DataFrame / CSV
+pandas>=2.2,<3
+PyYAML>=6.0,<7
+numpy>=1.26,<3
+scikit-learn>=1.5,<2
+lightgbm>=4.5,<5
+
+# JRA 出馬表の発走時刻解析
+beautifulsoup4>=4.12,<5
+playwright>=1.50,<2
+
+# JV-Link COM 連携（Windows 専用）
+pywin32>=311; sys_platform == "win32"
