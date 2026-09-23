@@ -80,10 +80,10 @@ def race(race_id: str = "202605040711") -> RaceInfo:
 def evidence(race_id: str = "202605040711") -> SnapshotEvidence:
     return SnapshotEvidence(
         race_id=race_id,
-        label="1m",
-        target_datetime=dt.datetime(2026, 9, 22, 15, 39, tzinfo=JST),
-        acquired_at=dt.datetime(2026, 9, 22, 15, 38, tzinfo=JST),
-        source_datetime=dt.datetime(2026, 9, 22, 15, 38, tzinfo=JST),
+        label="5m",
+        target_datetime=dt.datetime(2026, 9, 22, 15, 35, tzinfo=JST),
+        acquired_at=dt.datetime(2026, 9, 22, 15, 35, 2, tzinfo=JST),
+        source_datetime=dt.datetime(2026, 9, 22, 15, 34, tzinfo=JST),
         source_age_seconds=60.0,
         status="saved",
     )
@@ -155,7 +155,7 @@ class StrategyTests(unittest.TestCase):
     def test_simulator_rows_are_filtered_and_rounded_down(self) -> None:
         frame = pd.DataFrame(
             [
-                {"race_id": "202605040711", "horse_number": 3, "bet_amount": 299, "skip_reason": "", "odds_1m": 8.2},
+                {"race_id": "202605040711", "horse_number": 3, "bet_amount": 299, "skip_reason": "", "odds_5m": 8.2},
                 {"race_id": "202605040711", "horse_number": 4, "bet_amount": 500, "skip_reason": "ev_below_threshold"},
                 {"race_id": "202605040711", "horse_number": 5, "bet_amount": 99, "skip_reason": ""},
             ]
@@ -164,6 +164,7 @@ class StrategyTests(unittest.TestCase):
         self.assertEqual(len(result.intents), 1)
         self.assertEqual(result.intents[0].amount_yen, 200)
         self.assertEqual(result.intents[0].selection, (3,))
+        self.assertEqual(result.intents[0].expected_odds, 8.2)
 
 
 class SnapshotReaderTests(unittest.TestCase):
@@ -172,7 +173,7 @@ class SnapshotReaderTests(unittest.TestCase):
             root = Path(raw)
             races_dir, odds_dir = root / "races", root / "odds"
             races_dir.mkdir()
-            odds_dir.mkdir()
+            (odds_dir / "20260922").mkdir(parents=True)
             pd.DataFrame(
                 [{
                     "race_id": "202605040711", "rt_key": "202609220511",
@@ -182,13 +183,16 @@ class SnapshotReaderTests(unittest.TestCase):
             ).to_csv(races_dir / "20260922_jra_today_schedule.csv", index=False, encoding="utf-8-sig")
             pd.DataFrame(
                 [{
-                    "race_id": "202605040711", "snapshot_label": "1m",
-                    "target_datetime": "2026-09-22T15:39:00",
-                    "acquired_at": "2026-09-22T15:38:30",
-                    "latest_happyo_datetime": "2026-09-22T15:38:00",
+                    "race_id": "202605040711", "snapshot_label": "5m",
+                    "target_datetime": "2026-09-22T15:35:00",
+                    "acquired_at": "2026-09-22T15:35:02",
+                    "latest_happyo_datetime": "2026-09-22T15:34:00",
                     "source_age_seconds": 60, "status": "saved",
                 }]
-            ).to_csv(odds_dir / "20260922_scheduler_events.csv", index=False, encoding="utf-8-sig")
+            ).to_csv(
+                odds_dir / "20260922" / "20260922_scheduler_events.csv",
+                index=False, encoding="utf-8-sig",
+            )
             reader = SnapshotReader(races_dir, odds_dir)
             races = reader.load_races(dt.date(2026, 9, 22))
             events = reader.load_evidence(dt.date(2026, 9, 22))

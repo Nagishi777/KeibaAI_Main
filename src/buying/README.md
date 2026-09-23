@@ -63,8 +63,10 @@ official_close    = 発走1分前（参考値。システムの送信期限に�
 既存の以下を利用する。
 
 - レース情報: `data/processed/races/YYYYMMDD_jra_today_schedule.csv`
-- オッズ・票数: `data/processed/realtime_odds/YYYYMMDD_{bet_type}_1m.csv`
-- 取得状態: `data/processed/realtime_odds/YYYYMMDD_scheduler_events.csv`
+- オッズ・票数: `data/processed/realtime_odds/YYYYMMDD/{race_id}_{bet_type}_realtimeodds.csv`（全時点を `snapshot_label` 列で保持）
+- 取得状態: `data/processed/realtime_odds/YYYYMMDD/YYYYMMDD_scheduler_events.csv`
+
+> 2026-09-23 更新: 上記 §2 の選択肢3を採用し、シミュレータの判断時点を `5m` に前倒しした。購入時の証跡チェックは `snapshot_label=5m`・`target_datetime = post_datetime - 5 minutes` を要求する（`src/buying/snapshot_reader.py` の `DECISION_SNAPSHOT_LABEL`）。
 
 判断モジュールへ渡す `DecisionContext` は最低限、次を持つ。
 

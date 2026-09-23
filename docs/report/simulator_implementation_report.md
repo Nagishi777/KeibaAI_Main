@@ -48,7 +48,7 @@ q0.75 から **739,195,000円** となり、仕様書 §5.2 の記載値と**完
 
 | 論点 | 採用した方針 |
 |---|---|
-| 当日データの取得 | `src/simulator/scraping/` の既存スクレイパを使い、取得→予測まで一気通貫 |
+| 当日データの取得 | `src/scraping/` の既存スクレイパを使い、取得→予測まで一気通貫 |
 | 再学習の方式 | 全期間で毎回ゼロから再学習（インクリメンタル更新はしない） |
 | `pool_1m` しきい値 | 再学習時に学習期間から再計算し、モデルと対で保存 |
 
@@ -320,6 +320,9 @@ ModuleNotFoundError: No module named 'src.scraping._jvlink_o1'
 当日予測から呼ぶ必要があるため、import 先を `src.simulator.scraping.*` に修正した。
 これが既存ファイルへの唯一の変更である（当該ファイルは未コミット状態だった）。
 
+> **追記:** その後 `src/simulator/scraping/` は `src/scraping/` と重複していたため削除し、
+> 当日オッズ取得は `src/scraping/realtime_odds.py`（`python -m src.scraping.realtime_odds`）に一本化した。
+
 ---
 
 ## 6. 限界と未確認事項
@@ -456,4 +459,4 @@ python -m pytest test/test_simulator.py
 | `src/simulator/features.py` | 特徴量2列 + `pool_1m` の構築。**学習・当日の双方が共用** |
 | `src/simulator/realtime_loader.py` | 当日スクレイパ出力を学習側と同じワイド表へ整形 |
 | `src/simulator/artifacts.py` | モデル・キャリブレータ・しきい値の保存/読込と存在検証 |
-| `src/simulator/scraping/realtime_odds.py` | 当日オッズ取得（既存。import先のみ修正） |
+| `src/scraping/realtime_odds.py` | 当日オッズ取得（既存。import先のみ修正） |

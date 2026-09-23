@@ -4,7 +4,7 @@
 
 ## 1. 何ができるか
 
-プログラムを一度起動すると、指定日の全競馬場・全レースの発走時刻を読み込み、各レースについて次の6時点で単勝・複勝・枠連のオッズを取得します。
+プログラムを一度起動すると、指定日の全競馬場・全レースの発走時刻を読み込み、各レースについて次の9時点で単勝・複勝・枠連のオッズを取得します。
 
 | ラベル | 発走時刻から |
 | --- | ---: |
@@ -12,6 +12,9 @@
 | `30m` | 30分前 |
 | `10m` | 10分前 |
 | `5m` | 5分前 |
+| `4m` | 4分前 |
+| `3m` | 3分前 |
+| `2m` | 2分前 |
 | `1m` | 1分前 |
 | `10s` | 10秒前 |
 
@@ -95,11 +98,13 @@ Windowsタスクスケジューラを使う場合は、プログラムに `.venv
 
 `venue_code` でグループ化すると、開催場がすべて入っているか確認できます。
 
-### 時点別オッズ
+### レース別オッズ
 
-`data/processed/realtime_odds/YYYYMMDD_{券種}_{時点}.csv`
+`data/processed/realtime_odds/YYYYMMDD/{race_id}_{券種}_realtimeodds.csv`
 
-例: `20260920_tansho_60m.csv`, `20260920_fukusho_10m.csv`, `20260920_wakuren_10s.csv`。
+日付ごとのフォルダの下に、1レース・1券種につき1ファイルを作ります。1ファイルに `60m`～`10s` の全時点が `snapshot_label` 列付きで縦に並び、基準時刻（`target_datetime`）順に追記されます。
+
+例: `20260920/202605040711_tansho_realtimeodds.csv`, `20260920/202605040711_fukusho_realtimeodds.csv`, `20260920/202605040711_wakuren_realtimeodds.csv`。
 
 券種は `tansho`（単勝）、`fukusho`（複勝）、`wakuren`（枠連）です。共通列と券種固有列は次のとおりです。
 
@@ -133,7 +138,7 @@ Windowsタスクスケジューラを使う場合は、プログラムに `.venv
 
 ### 実行記録
 
-`data/processed/realtime_odds/YYYYMMDD_scheduler_events.csv`
+`data/processed/realtime_odds/YYYYMMDD/YYYYMMDD_scheduler_events.csv`
 
 主な列は `rt_key`, `race_id`, `snapshot_label`, `target_datetime`, `post_datetime`, `acquired_at`, `delay_seconds`, `odds_dataspec`, `latest_happyo_datetime`, `source_age_seconds`, `freshness_limit_seconds`, `status`, `rows_saved` です。
 
@@ -147,17 +152,20 @@ Windowsタスクスケジューラを使う場合は、プログラムに `.venv
 
 ## 6. データの読み方
 
-例えば単勝の10分前データを確認します。
+例えばあるレースの単勝の10分前データを確認します。
 
 ```python
 import pandas as pd
 
 df = pd.read_csv(
-    "data/processed/realtime_odds/20260920_tansho_10m.csv",
+    "data/processed/realtime_odds/20260920/202605040711_tansho_realtimeodds.csv",
     dtype={"race_id": str, "rt_key": str, "umaban": str},
 )
-print(df[["race_id", "umaban", "odds_win", "ninkijun", "happyo_datetime"]].head())
+m10 = df[df["snapshot_label"] == "10m"]
+print(m10[["race_id", "umaban", "odds_win", "ninkijun", "happyo_datetime"]].head())
 ```
+
+当日予測（`src.simulator.predict_today`）は、この単勝ファイルの `10m` と `5m` の行を使います。
 
 同じレース・同じ馬の時点比較は `race_id` と `umaban`（枠連なら `kumiban`）で行います。発走時刻との比較には `target_datetime`、JV-Link側の発表時刻の確認には `happyo_datetime`、値の古さには `source_age_seconds`、実際の取得遅延の確認には `acquired_at` と `delay_seconds` を使います。
 

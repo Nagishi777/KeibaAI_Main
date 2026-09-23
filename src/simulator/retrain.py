@@ -1,7 +1,7 @@
 """レース後にモデルを再学習する単独実行プログラム（spec §4）。
 
-過去の締切前オッズ（5m / 1m）から特徴量2列を作り、確定着順をラベルにして
-LightGBM を学習する。あわせてレース選別のしきい値（``pool_1m`` の q0.75）を
+過去の締切前オッズ（10m / 5m）から特徴量2列を作り、確定着順をラベルにして
+LightGBM を学習する。あわせてレース選別のしきい値（``pool_5m`` の q0.75）を
 **学習期間の分布から**求め、モデルと対で保存する。
 
     # 全期間で再学習（レースが終わったらこれを実行する）
@@ -25,7 +25,7 @@ IMPORTANT (時系列リーク防止):
       木の学習（fit）期間には触れさせない。
     - ``pool_threshold`` も**学習期間の分布**から決める。予測時に当日の
       レース群から取り直すと未来を見ない前提が崩れる（spec §5.2）。
-    - 特徴量は 5m / 1m の締切前スナップショットのみ。確定オッズ・確定票数・
+    - 特徴量は 10m / 5m の締切前スナップショットのみ。確定オッズ・確定票数・
       払戻は使わない。着順はラベルとしてのみ使う。
 
 IMPORTANT (木を小さくする理由 / spec §4):
@@ -43,8 +43,6 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from src.backtest.dataset import load_finish_positions
-from src.features.market.odds_series_loader import load_odds_series
 from src.models.model_creator import ModelCreator
 from src.simulator.artifacts import (
     DEFAULT_MODEL_FILENAME,
@@ -52,8 +50,12 @@ from src.simulator.artifacts import (
     resolve_model_path,
     save_params,
 )
+from src.simulator.dataset import load_finish_positions
+from src.simulator.odds_series_loader import load_odds_series
 from src.simulator.features import (
+    DECISION_SNAPSHOT,
     FEATURE_COLS,
+    POOL_COL,
     REQUIRED_SNAPSHOTS,
     attach_features,
     describe_pool_quantiles,
@@ -127,7 +129,7 @@ def load_training_data(
         end_period: 終了年月 (YYYYMM)
 
     Returns:
-        pd.DataFrame: 特徴量・``pool_1m``・``target_win``・``date`` を持つ表
+        pd.DataFrame: 特徴量・``pool_5m``・``target_win``・``date`` を持つ表
 
     Raises:
         ValueError: 着順が結合できない行がある場合（補完せず停止する）
@@ -247,7 +249,7 @@ def run_retrain(
         config: 全体設定辞書
         start_period: 学習開始年月 (YYYYMM)
         end_period: 学習終了年月 (YYYYMM)
-        pool_quantile: ``pool_1m`` しきい値を取る分位点
+        pool_quantile: ``pool_5m`` しきい値を取る分位点
         holdout_months: 学習期間末尾から切り出す holdout の月数
         min_ev: 予測側の既定 EV しきい値（省略時は ``DEFAULT_MIN_EV``）
         model_filename: ``data/model`` 配下の保存ファイル名
@@ -262,7 +264,7 @@ def run_retrain(
     # --- レース選別しきい値を学習期間の分布から決める（spec §5.2） ---
     pool_by_race = race_pool(work)
     threshold = pool_threshold(pool_by_race, pool_quantile)
-    logger.warning('学習期間のレース総投票額（1m時点）の分位点:')
+    logger.warning('学習期間のレース総投票額（%s時点）の分位点:', DECISION_SNAPSHOT)
     for label, value in describe_pool_quantiles(pool_by_race):
         mark = ' ← 採用' if abs(value - threshold) < 1e-6 else ''
         logger.warning('  %s: %15s 円%s', label, f'{value:,.0f}', mark)
@@ -330,7 +332,7 @@ def run_retrain(
         pool_quantile=float(pool_quantile),
         feature_cols=list(FEATURE_COLS),
         min_ev=float(min_ev if min_ev is not None else DEFAULT_MIN_EV),
-        odds_snapshot='1m',
+        odds_snapshot=DECISION_SNAPSHOT,
         train_start=str(work['date'].min().date()),
         train_end=str(work['date'].max().date()),
         n_train_rows=len(work),
@@ -374,7 +376,7 @@ def _parse_args() -> argparse.Namespace:
                         help='学習終了年月 (YYYYMM)')
     parser.add_argument('--pool-quantile', type=float,
                         default=DEFAULT_POOL_QUANTILE,
-                        help='pool_1m しきい値を取る分位点（既定 0.75）')
+                        help=f'{POOL_COL} しきい値を取る分位点（既定 0.75）')
     parser.add_argument('--holdout-months', type=int,
                         default=DEFAULT_HOLDOUT_MONTHS,
                         help='学習期間末尾から切り出す holdout の月数')

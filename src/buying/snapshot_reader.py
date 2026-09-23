@@ -9,6 +9,19 @@ import pandas as pd
 
 from src.buying.clock import JST
 from src.buying.domain import RaceInfo, SnapshotEvidence
+from src.simulator.features import DECISION_SNAPSHOT
+
+# 購入判断に使うスナップショット。シミュレータの判断時点と必ず一致させる。
+DECISION_SNAPSHOT_LABEL = DECISION_SNAPSHOT
+
+
+def snapshot_offset(label: str) -> dt.timedelta:
+    """``5m`` / ``10s`` 形式の時点ラベルを発走時刻からの差に変換する。"""
+    units = {"m": "minutes", "s": "seconds"}
+    unit = units.get(label[-1:])
+    if unit is None or not label[:-1].isdigit():
+        raise ValueError(f"時点ラベルの形式が不正です: {label!r}")
+    return dt.timedelta(**{unit: int(label[:-1])})
 
 
 class SnapshotDataError(ValueError):
@@ -57,12 +70,12 @@ class SnapshotReader:
         return races
 
     def load_evidence(
-        self, target_date: dt.date, *, label: str = "1m"
+        self, target_date: dt.date, *, label: str = DECISION_SNAPSHOT_LABEL
     ) -> dict[str, SnapshotEvidence]:
         stamp = f"{target_date:%Y%m%d}"
         candidates = [
-            self.odds_dir / f"{stamp}_scheduler_events.csv",
             self.odds_dir / stamp / f"{stamp}_scheduler_events.csv",
+            self.odds_dir / f"{stamp}_scheduler_events.csv",
         ]
         path = next((candidate for candidate in candidates if candidate.exists()), None)
         if path is None:

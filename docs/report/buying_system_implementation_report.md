@@ -177,7 +177,7 @@ python -m src.buying.cli --env src\buying\.env run-once --live
 JV-Linkの取得処理を別プロセスで先に起動する。
 
 ```powershell
-python -m src.simulator.scraping.realtime_odds
+python -m src.scraping.realtime_odds
 ```
 
 購入側を別のPowerShellで起動する。

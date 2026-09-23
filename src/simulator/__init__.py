@@ -1,9 +1,10 @@
 """当日オッズ・投票数による予測とモデル再学習のパッケージ。
 
-``docs/pool_filter_condition_spec.md`` の条件（賭け1m / pool_1m q0.75 /
-all / ev1.10）を実運用の2プログラムに落としたもの。
+``docs/pool_filter_condition_spec.md`` の条件（pool q0.75 / all / ev1.10）を、
+判断時点を 5m に前倒し（賭け5m / pool_5m / 特徴量 odds_5m・inc_share_10m_5m）
+して実運用の2プログラムに落としたもの。
 
-    # レース当日: 1m時点オッズを取得して予測・ベット推奨を出す
+    # レース当日: 5m時点オッズを取得して予測・ベット推奨を出す
     python -m src.simulator.predict_today
 
     # レース後: 確定着順を加えてモデルを再学習する

@@ -1,0 +1,50 @@
+# KeibaAI 設定ファイル
+# main.py / src.simulator.predict_today / src.simulator.retrain / src.buying.cli が読む。
+# 購入の認証情報・金額上限は src/buying/.env に書く（このファイルには書かない）。
+
+data:
+  # 着順 data/processed/horses/*_horses.csv の親フォルダ（再学習のラベル）
+  parsed_data_dir: data/processed
+  # 学習用の月別締切前オッズ YYYYMM_odds_series_tansho.csv の置き場所
+  odds_series_output_dir: data/processed/odds_series
+  # 予測結果 output/simulator/ と日次レポート output/pipeline/ の親フォルダ
+  output_dir: output
+
+model:
+  # 学習済みモデルの保存先（data/model/simulator/win_pool_filter.txt 等）
+  model_dir: data/model
+  # 木の形は src/simulator/retrain.py の SPEC_LGBM_PARAMS で上書きされる。
+  # ここでは木の本数の上限と early stopping だけを指定する。
+  lightgbm:
+    n_estimators: 1000
+    early_stopping_rounds: 50
+  calibration:
+    method: isotonic
+    min_samples_per_bin: 0
+    min_pos_per_bin: 0
+  # 直近のレースほど重く学習する時間減衰ウェイト
+  time_decay:
+    recent_years: 2.0
+    mid_years: 4.0
+    w_recent: 3.0
+    w_mid: 2.0
+
+# 賭け金の計算（docs/report/pool_filter_condition_spec.md §6）
+evaluation:
+  initial_bankroll: 100000     # Kelly の基準資金（円）
+  use_kelly_criterion: true
+  kelly_fraction: 0.1          # fractional Kelly
+  max_bet: 5000                # 1点あたりの上限（円）。実際の購入上限は .env の BUYING_MAX_* も効く
+  min_proba_win: 0.0
+  max_bets_per_race_win: 3
+
+# main.py の日次実行
+pipeline:
+  model_filename: simulator/win_pool_filter.txt
+  retrain_start_period: '202401'   # 再学習に使う最初の年月（終わりは実行日の月）
+  retrain_delay_minutes: 30        # 最終レース発走から再学習を始めるまでの分数
+
+# 単独実行（python -m src.simulator.*）時のログ
+logging:
+  level: INFO
+  file: logs/app.log

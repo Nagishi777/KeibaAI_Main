@@ -12,6 +12,7 @@ from typing import Any
 import pandas as pd
 
 from src.buying.domain import BetIntent, BetType
+from src.simulator.features import INC_SHARE_COL, ODDS_COL, POOL_COL
 
 STRATEGY_ID = "simulator_pool_filter_v1"
 
@@ -102,7 +103,7 @@ class SimulatorStrategy:
             horse = int(row["horse_number"])
             metadata = {
                 key: row[key]
-                for key in ("pred_proba", "odds_1m", "ev", "pool_1m", "inc_share_5m_1m")
+                for key in ("pred_proba", ODDS_COL, "ev", POOL_COL, INC_SHARE_COL)
                 if key in row and not pd.isna(row[key])
             }
             intents.append(
@@ -114,8 +115,8 @@ class SimulatorStrategy:
                     strategy_id=STRATEGY_ID,
                     reason_code="simulator_selected",
                     expected_odds=(
-                        float(row["odds_1m"])
-                        if "odds_1m" in row and not pd.isna(row["odds_1m"])
+                        float(row[ODDS_COL])
+                        if ODDS_COL in row and not pd.isna(row[ODDS_COL])
                         else None
                     ),
                     metadata=metadata,

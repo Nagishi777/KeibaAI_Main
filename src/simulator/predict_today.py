@@ -1,6 +1,6 @@
 """当日のオッズ・投票数で予測しベット推奨を出す単独実行プログラム（spec §6）。
 
-レース当日、1m時点のオッズと総票数を取得して特徴量化し、学習済みモデルで
+レース当日、10m・5m時点のオッズと総票数を取得して特徴量化し、学習済みモデルで
 各馬の勝率を予測して、買うべき馬と賭け金を CSV に出力する。
 
     # 取得から予測まで一気通貫（当日これを実行する）
@@ -14,26 +14,27 @@
 
 処理の流れ（spec §1）::
 
-    [1] 5m時点と1m時点のオッズ・総票数を取得（--fetch で当日スクレイパを起動）
+    [1] 10m時点と5m時点のオッズ・総票数を取得（--fetch で当日スクレイパを起動）
     [2] 馬番別の投票額を逆算（オッズの定義式から）
-    [3] 特徴量2列を作る: odds_1m / inc_share_5m_1m
+    [3] 特徴量2列を作る: odds_5m / inc_share_10m_5m
     [4] 学習済み LightGBM で各馬の勝率を予測
-    [5] 【フィルタ】1m時点のレース総額がしきい値未満のレースは丸ごと見送る
-    [6] 残ったレースで EV = 予測確率 × 1mオッズ >= min_ev の馬を買う
+    [5] 【フィルタ】5m時点のレース総額がしきい値未満のレースは丸ごと見送る
+    [6] 残ったレースで EV = 予測確率 × 5mオッズ >= min_ev の馬を買う
     [7] 賭け金は fractional Kelly で決定、1レース最大 N 点
 
 出力: ``output/simulator/{YYYYMMDD}_bets.csv``（推奨のみ）と
 ``{YYYYMMDD}_all.csv``（全馬の予測。見送り理由つき）。
 
 IMPORTANT (しきい値は学習時の固定値を使う):
-    ``pool_1m`` のしきい値は再学習時に**学習期間の分布**から決めた値を
+    ``pool_5m`` のしきい値は再学習時に**学習期間の分布**から決めた値を
     そのまま使う（spec §5.2）。当日のレース群から取り直すと「その日
     たまたま厚かったレース」を基準にすることになり、未来を見ない前提が
     崩れる。
 
-IMPORTANT (1m時点で発注できる前提):
-    実際の投票締切は発走の約1〜2分前である。1mオッズを見て発注する時間的
-    余裕があるかは運用側で検証すること（spec §8-5）。
+IMPORTANT (5m時点で判断する理由):
+    実際の投票締切は発走の約1分前であり、1mオッズを見てから発注する時間的
+    余裕は無い（spec §8-5）。よって判断を 5m 時点に前倒ししている。
+    5m以降のオッズ（4m〜10s）は取得・保存するが予測には使わない。
 
 IMPORTANT (本条件は実運用の推奨ではない):
     単一分割・多重比較を含む調査結果であり、期間安定性は未検証。
@@ -44,7 +45,7 @@ import datetime as dt
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Iterable, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -59,6 +60,8 @@ from src.simulator.artifacts import (
     resolve_model_path,
 )
 from src.simulator.features import (
+    INC_SHARE_COL,
+    ODDS_COL,
     POOL_COL,
     attach_features,
     drop_incomplete_rows,
@@ -123,7 +126,7 @@ def fetch_today_odds(
         RuntimeError: 当日の発走時刻を取得できなかった場合
     """
     # JV-Link / ブラウザに依存するため、--fetch 指定時のみ import する
-    from src.simulator.scraping.realtime_odds import (
+    from src.scraping.realtime_odds import (
         get_today_schedule,
         run_scheduler,
     )
@@ -175,7 +178,7 @@ def select_bets(
 
     Args:
         config: 全体設定辞書
-        df: 特徴量・``pool_1m``・``odds_1m`` を持つ DataFrame
+        df: 特徴量・``pool_5m``・``odds_5m`` を持つ DataFrame
         proba: 予測確率（df と同じ行順）
         params: 運用パラメータ（しきい値・既定 EV）
         min_ev: EV しきい値（省略時は ``params.min_ev``）
@@ -191,8 +194,8 @@ def select_bets(
 
     work = df.copy().reset_index(drop=True)
     work['pred_proba'] = np.asarray(proba, dtype='float64')
-    # 賭け判断オッズは 1m 時点（spec §6「賭け値と特徴量の時点が揃っている」）
-    work['odds_used'] = work['odds_1m'].astype('float64')
+    # 賭け判断オッズは 5m 時点（spec §6「賭け値と特徴量の時点が揃っている」）
+    work['odds_used'] = work[ODDS_COL].astype('float64')
     work['ev'] = work['pred_proba'] * work['odds_used']
 
     # [5] レース単位のフィルタ。通らないレースは丸ごと見送る。
@@ -238,8 +241,37 @@ def select_bets(
     ).reset_index(drop=True)
 
 
+def _write_csv(
+    frame: pd.DataFrame, path: Path, race_ids: set, *, merge_existing: bool
+) -> pd.DataFrame:
+    """CSV を書き出す。``merge_existing`` なら今回のレース以外の既存行を残す。
+
+    Args:
+        frame: 書き出す行
+        path: 出力先
+        race_ids: 今回予測したレース（既存行から置き換える対象）
+        merge_existing: True なら既存ファイルのうち ``race_ids`` 以外の行を残す
+
+    Returns:
+        pd.DataFrame: 実際に書き出した表
+    """
+    if merge_existing and path.exists():
+        existing = pd.read_csv(path, encoding='utf-8-sig', dtype={'race_id': str})
+        existing = existing[~existing['race_id'].isin(race_ids)]
+        frame = pd.concat([existing, frame], ignore_index=True, sort=False)
+        frame = frame.sort_values(
+            ['race_id', 'pred_proba'], ascending=[True, False], kind='stable'
+        )
+    frame.to_csv(path, index=False, encoding='utf-8-sig')
+    return frame
+
+
 def save_outputs(
-    work: pd.DataFrame, target_date: dt.date, output_dir: Path
+    work: pd.DataFrame,
+    target_date: dt.date,
+    output_dir: Path,
+    *,
+    merge_existing: bool = False,
 ) -> Tuple[Path, Path]:
     """推奨 CSV と全馬 CSV を書き出す。
 
@@ -247,27 +279,37 @@ def save_outputs(
         work: :func:`select_bets` の戻り値
         target_date: 対象日
         output_dir: 出力先ディレクトリ
+        merge_existing: True なら既存の当日 CSV のうち今回予測していない
+            レースの行を残して追記する（レース単位で予測する場合に使う）
 
     Returns:
         Tuple[Path, Path]: (推奨 CSV, 全馬 CSV) のパス
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = f'{target_date:%Y%m%d}'
+    race_ids = set(work['race_id'].astype(str))
 
     cols = [
-        'race_id', 'horse_number', 'pred_proba', 'odds_1m', 'ev',
-        'bet_amount', POOL_COL, 'inc_share_5m_1m', 'skip_reason',
+        'race_id', 'horse_number', 'pred_proba', ODDS_COL, 'ev',
+        'bet_amount', POOL_COL, INC_SHARE_COL, 'skip_reason',
     ]
     all_path = output_dir / f'{stamp}_all.csv'
-    work[cols].to_csv(all_path, index=False, encoding='utf-8-sig')
+    written_all = _write_csv(
+        work[cols], all_path, race_ids, merge_existing=merge_existing
+    )
 
     bets = work[work['skip_reason'] == REASON_BET]
     bets_path = output_dir / f'{stamp}_bets.csv'
-    bets[cols].drop(columns='skip_reason').to_csv(
-        bets_path, index=False, encoding='utf-8-sig'
+    # 今回のレースに推奨が無い場合も、同レースの古い推奨行は置き換えて消す
+    _write_csv(
+        bets[cols].drop(columns='skip_reason'), bets_path, race_ids,
+        merge_existing=merge_existing,
     )
-    logger.warning('推奨を保存: %s（%s 点）', bets_path, f'{len(bets):,}')
-    logger.warning('全馬の予測を保存: %s（%s 行）', all_path, f'{len(work):,}')
+    logger.warning('推奨を保存: %s（今回 %s 点）', bets_path, f'{len(bets):,}')
+    logger.warning(
+        '全馬の予測を保存: %s（今回 %s 行 / ファイル全体 %s 行）',
+        all_path, f'{len(work):,}', f'{len(written_all):,}',
+    )
     return bets_path, all_path
 
 
@@ -281,6 +323,7 @@ def run_predict_today(
     fetch: bool = False,
     headless: bool = True,
     output_dir: Optional[Path] = None,
+    race_ids: Optional[Iterable[str]] = None,
 ) -> Tuple[PredictionSummary, pd.DataFrame]:
     """当日予測を実行し、推奨 CSV を出力する。
 
@@ -293,6 +336,8 @@ def run_predict_today(
         fetch: True なら当日スクレイパを起動してから予測する
         headless: 出馬表取得用ブラウザを非表示にするか
         output_dir: 出力先（省略時は ``config`` の ``output_dir/simulator``）
+        race_ids: 指定したレースだけを予測し、当日 CSV へ追記する
+            （省略時は取得済みの全レースを予測して上書きする）
 
     Returns:
         Tuple[PredictionSummary, pd.DataFrame]: (サマリ, 全馬の予測)
@@ -304,8 +349,44 @@ def run_predict_today(
             target_date, realtime_dir=realtime_dir, headless=headless
         )
 
-    # [1][2][3] 取得済み CSV → 特徴量
-    raw = load_today_snapshots(target_date, realtime_dir)
+    # [1] 取得済み CSV
+    raw = load_today_snapshots(target_date, realtime_dir, race_ids=race_ids)
+    return predict_from_snapshots(
+        config,
+        raw,
+        target_date=target_date,
+        model_filename=model_filename,
+        min_ev=min_ev,
+        output_dir=output_dir,
+        merge_existing=race_ids is not None,
+    )
+
+
+def predict_from_snapshots(
+    config: dict,
+    raw: pd.DataFrame,
+    *,
+    target_date: dt.date,
+    model_filename: str = DEFAULT_MODEL_FILENAME,
+    min_ev: Optional[float] = None,
+    output_dir: Optional[Path] = None,
+    merge_existing: bool = False,
+) -> Tuple[PredictionSummary, pd.DataFrame]:
+    """読込済みの 10m / 5m ワイド表から予測し、推奨 CSV を出力する。
+
+    Args:
+        config: 全体設定辞書
+        raw: :func:`src.simulator.realtime_loader.load_today_snapshots` の戻り値
+        target_date: 対象日
+        model_filename: ``data/model`` 配下のモデルファイル名
+        min_ev: EV しきい値（省略時はモデルの運用パラメータ）
+        output_dir: 出力先（省略時は ``config`` の ``output_dir/simulator``）
+        merge_existing: True なら当日 CSV の他レースの行を残して追記する
+
+    Returns:
+        Tuple[PredictionSummary, pd.DataFrame]: (サマリ, 全馬の予測)
+    """
+    # [2][3] 特徴量
     work = attach_features(raw)
     n_races_total = int(work['race_id'].nunique())
     work = drop_incomplete_rows(work, context='当日予測')
@@ -320,7 +401,9 @@ def run_predict_today(
         output_dir = Path(
             config.get('data', {}).get('output_dir', 'output')
         ) / OUTPUT_SUBDIR
-    bets_path, all_path = save_outputs(work, target_date, output_dir)
+    bets_path, all_path = save_outputs(
+        work, target_date, output_dir, merge_existing=merge_existing
+    )
 
     bets = work[work['skip_reason'] == REASON_BET]
     passed = work[work[POOL_COL] >= params.pool_threshold]
@@ -417,13 +500,13 @@ def main() -> None:
     print()
     print(f'=== 当日予測: {summary.target_date} ===')
     print(f'  レース      : {summary.n_races_passed} / {summary.n_races_total}'
-          f' がフィルタ通過（pool_1m >= {summary.pool_threshold:,.0f}円）')
+          f' がフィルタ通過（{POOL_COL} >= {summary.pool_threshold:,.0f}円）')
     print(f'  賭け条件    : EV >= {summary.min_ev:.2f}')
     print(f'  推奨点数    : {summary.n_bets} 点 / 合計 {summary.total_bet:,.0f} 円')
     if summary.n_bets:
         print(f'  平均オッズ  : {summary.mean_odds:.1f} 倍')
         print()
-        show = ['race_id', 'horse_number', 'pred_proba', 'odds_1m', 'ev', 'bet_amount']
+        show = ['race_id', 'horse_number', 'pred_proba', ODDS_COL, 'ev', 'bet_amount']
         print(bets[show].to_string(index=False, float_format=lambda v: f'{v:.4f}'))
     else:
         print('  → 本日の推奨はありません（フィルタ・EV を通る馬がいませんでした）')

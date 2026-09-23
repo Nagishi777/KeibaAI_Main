@@ -7,6 +7,7 @@ import datetime as dt
 from src.buying.clock import RaceClock
 from src.buying.config import BuyingSettings
 from src.buying.domain import BetIntent, RaceInfo, RiskDecision, SnapshotEvidence
+from src.buying.snapshot_reader import DECISION_SNAPSHOT_LABEL, snapshot_offset
 
 
 class RiskGate:
@@ -68,9 +69,9 @@ class RiskGate:
                 reasons.append("snapshot_race_mismatch")
             if evidence.status != "saved":
                 reasons.append(f"snapshot_status:{evidence.status}")
-            if evidence.label != "1m":
+            if evidence.label != DECISION_SNAPSHOT_LABEL:
                 reasons.append("snapshot_label_mismatch")
-            expected_target = race.post_datetime - dt.timedelta(minutes=1)
+            expected_target = race.post_datetime - snapshot_offset(DECISION_SNAPSHOT_LABEL)
             target_skew = abs((evidence.target_datetime - expected_target).total_seconds())
             if target_skew > self.settings.max_clock_skew_seconds:
                 reasons.append("snapshot_target_time_mismatch")

@@ -98,7 +98,8 @@ def _strategy(args: argparse.Namespace, settings: BuyingSettings, target_date: d
     )
 
 
-def _audit(settings: BuyingSettings) -> AuditLogger:
+def build_audit_logger(settings: BuyingSettings) -> AuditLogger:
+    """認証情報をマスク対象にした監査ログを作る。"""
     credentials = settings.credentials
     secrets = () if credentials is None else (
         credentials.inet_id,
@@ -120,7 +121,7 @@ def _run_once(
     evidence = reader.load_evidence(target_date)
     result = _strategy(args, settings, target_date)
     ledger = Ledger(settings.ledger_path)
-    audit = _audit(settings)
+    audit = build_audit_logger(settings)
     service = PurchaseService(
         settings,
         ledger,
@@ -151,7 +152,7 @@ def _run_day(args: argparse.Namespace, settings: BuyingSettings, target_date: dt
             report = _run_once(args, settings, target_date=target_date)
             print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
         except (FileNotFoundError, ValueError) as exc:
-            # 1mファイルがまだ生成されていない時間帯は次のポーリングで再試行する。
+            # 5m時点のオッズがまだ保存されていない時間帯は次のポーリングで再試行する。
             print(f"待機: {exc}", file=sys.stderr)
         time.sleep(settings.poll_interval_seconds)
     return 0

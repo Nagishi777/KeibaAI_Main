@@ -26,7 +26,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-from src.simulator.features import FEATURE_COLS
+from src.simulator.features import DECISION_SNAPSHOT, FEATURE_COLS
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ class SimulatorParams:
     feature_cols: List[str] = field(default_factory=lambda: list(FEATURE_COLS))
     # spec §6: 賭け条件
     min_ev: float = 1.10
-    odds_snapshot: str = '1m'
+    odds_snapshot: str = DECISION_SNAPSHOT
     # 学習期間（しきい値の根拠を追えるようにする）
     train_start: str = ''
     train_end: str = ''

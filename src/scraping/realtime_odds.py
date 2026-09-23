@@ -1,8 +1,14 @@
-"""発走時刻に合わせて JV-Link の当日オッズを時点別 CSV に保存する。
+"""発走時刻に合わせて JV-Link の当日オッズをレース別 CSV に保存する。
 
-各レースについて 60分・30分・10分・5分・1分・10秒前のジョブを生成する。
-速報オッズを基準時刻の少し前から継続取得し、``happyo_datetime <= 基準時刻``
-の値だけを採用するため、取得時点のキャッシュと未来のオッズの混入を抑える。
+各レースについて 60分・30分・10分・5分・4分・3分・2分・1分・10秒前のジョブを
+生成する。速報オッズを基準時刻の少し前から継続取得し、
+``happyo_datetime <= 基準時刻`` の値だけを採用するため、取得時点のキャッシュと
+未来のオッズの混入を抑える。
+
+出力（1レース・1券種につき1ファイル。全時点を ``snapshot_label`` 列で持つ）::
+
+    data/processed/realtime_odds/YYYYMMDD/{race_id}_{tansho|fukusho|wakuren}_realtimeodds.csv
+    data/processed/realtime_odds/YYYYMMDD/YYYYMMDD_scheduler_events.csv
 """
 
 from __future__ import annotations
@@ -10,10 +16,11 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 import pandas as pd
 
@@ -48,10 +55,25 @@ DEFAULT_SNAPSHOT_SPECS = (
     ("30m", dt.timedelta(minutes=30)),
     ("10m", dt.timedelta(minutes=10)),
     ("5m", dt.timedelta(minutes=5)),
+    ("4m", dt.timedelta(minutes=4)),
+    ("3m", dt.timedelta(minutes=3)),
+    ("2m", dt.timedelta(minutes=2)),
     ("1m", dt.timedelta(minutes=1)),
     ("10s", dt.timedelta(seconds=10)),
 )
+# 同一時刻に期限となったジョブは発走に近い時点から処理する。
+SNAPSHOT_PRIORITY = {
+    label: priority
+    for priority, (label, _) in enumerate(
+        sorted(DEFAULT_SNAPSHOT_SPECS, key=lambda spec: spec[1])
+    )
+}
 REQUIRED_SCHEDULE_COLUMNS = {"post_datetime", "race_id", "rt_key"}
+REALTIME_ODDS_SUFFIX = "realtimeodds"
+# 同一プロセス内で CSV を読む処理（src.pipeline の予測スレッド）と書込みを排他する。
+CSV_LOCK = threading.RLock()
+# ジョブ群の実行後に取得イベント（execute_jobs の events）を受け取るコールバック。
+JobsExecutedCallback = Callable[[list[dict[str, object]]], None]
 
 
 @dataclass(frozen=True)
@@ -68,8 +90,7 @@ class SnapshotJob:
 
     @property
     def sort_key(self) -> tuple[dt.datetime, int, str]:
-        priority = {"10s": 0, "1m": 1, "5m": 2, "10m": 3, "30m": 4, "60m": 5}
-        return (self.target_datetime, priority[self.label], self.rt_key)
+        return (self.target_datetime, SNAPSHOT_PRIORITY[self.label], self.rt_key)
 
 
 def _now_jst_naive() -> dt.datetime:
@@ -113,11 +134,15 @@ def get_today_schedule(
     target_date: dt.date,
     *,
     headless: bool = True,
+    schedule_dir: Path = DEFAULT_SCHEDULE_DIR,
 ) -> pd.DataFrame:
-    """JRA出馬表を毎回取得し、当日の発走時刻一覧を返す。"""
+    """JRA出馬表を毎回取得し、当日の発走時刻一覧を返す。
+
+    取得結果は ``schedule_dir/YYYYMMDD_jra_today_schedule.csv`` にも保存される。
+    """
     logger.info("当日の発走時刻をJRA出馬表から取得します: %s", target_date)
     frame = scrape_jra_today_schedule(
-        target_date, output_dir=DEFAULT_SCHEDULE_DIR, headless=headless
+        target_date, output_dir=Path(schedule_dir), headless=headless
     )
     if frame.empty:
         raise RuntimeError("当日の発走時刻を取得できませんでした")
@@ -244,41 +269,79 @@ def _active_poll_keys(
     return sorted(keys)
 
 
-def _upsert_csv(path: Path, frame: pd.DataFrame, dedupe_columns: list[str]) -> Path:
+def _upsert_csv(
+    path: Path,
+    frame: pd.DataFrame,
+    dedupe_columns: list[str],
+    *,
+    sort_columns: Optional[list[str]] = None,
+) -> Path:
     """生成済みCSVの同一レコードを更新して保存する。"""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        existing = pd.read_csv(path, dtype={"race_id": str, "rt_key": str})
-        frame = pd.concat([existing, frame], ignore_index=True, sort=False)
-    keys = [column for column in dedupe_columns if column in frame.columns]
-    if keys:
-        frame = frame.drop_duplicates(keys, keep="last")
-    frame.to_csv(path, index=False, encoding="utf-8-sig")
+    with CSV_LOCK:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            existing = pd.read_csv(
+                path,
+                dtype={"race_id": str, "rt_key": str, "umaban": str, "kumiban": str},
+                encoding="utf-8-sig",
+            )
+            frame = pd.concat([existing, frame], ignore_index=True, sort=False)
+        keys = [column for column in dedupe_columns if column in frame.columns]
+        if keys:
+            frame = frame.drop_duplicates(keys, keep="last")
+        order = [column for column in (sort_columns or []) if column in frame.columns]
+        if order:
+            frame = frame.sort_values(order, kind="stable")
+        frame.to_csv(path, index=False, encoding="utf-8-sig")
     return path
+
+
+def date_dir(output_dir: Path, target_date: dt.date) -> Path:
+    """対象日の出力フォルダ ``output_dir/YYYYMMDD`` を返す。"""
+    return Path(output_dir) / f"{target_date:%Y%m%d}"
+
+
+def race_odds_path(
+    output_dir: Path, target_date: dt.date, race_id: str, bet_type: str
+) -> Path:
+    """1レース・1券種分のオッズCSVのパスを返す。"""
+    return date_dir(output_dir, target_date) / (
+        f"{race_id}_{bet_type}_{REALTIME_ODDS_SUFFIX}.csv"
+    )
 
 
 def save_offset_snapshots(
     snapshots: dict[str, list[pd.DataFrame]], output_dir: Path, target_date: dt.date
 ) -> dict[str, Path]:
-    """券種・基準時刻ごとのCSVへ、スナップショットを重複なく保存する。"""
+    """レース・券種ごとのCSVへ、全時点のスナップショットを重複なく追記する。
+
+    戻り値のキーは ``{race_id}_{bet_type}``。
+    """
     paths: dict[str, Path] = {}
-    date_text = target_date.strftime("%Y%m%d")
     for bet_type, frames in snapshots.items():
         nonempty = [frame for frame in frames if not frame.empty]
         if not nonempty:
             continue
+        key_column = KEY_COLUMN[bet_type]
         combined = pd.concat(nonempty, ignore_index=True, sort=False)
-        for label, group in combined.groupby("snapshot_label", sort=False):
-            path = output_dir / f"{date_text}_{bet_type}_{label}.csv"
-            _upsert_csv(path, group, ["race_id", KEY_COLUMN[bet_type], "target_datetime"])
-            paths[f"{bet_type}_{label}"] = path
-            logger.info("時点別オッズ保存: %s (%d 件)", path, len(group))
+        for race_id, group in combined.groupby("race_id", sort=False):
+            path = race_odds_path(output_dir, target_date, str(race_id), bet_type)
+            _upsert_csv(
+                path, group,
+                ["race_id", key_column, "snapshot_label", "target_datetime"],
+                sort_columns=["target_datetime", key_column],
+            )
+            paths[f"{race_id}_{bet_type}"] = path
+            logger.info(
+                "時点別オッズ保存: %s (%s, %d 件)",
+                path, ",".join(group["snapshot_label"].unique()), len(group),
+            )
     return paths
 
 
 def _save_events(events: list[dict[str, object]], output_dir: Path, target_date: dt.date) -> Path:
     return _upsert_csv(
-        output_dir / f"{target_date:%Y%m%d}_scheduler_events.csv",
+        date_dir(output_dir, target_date) / f"{target_date:%Y%m%d}_scheduler_events.csv",
         pd.DataFrame(events), ["rt_key", "snapshot_label", "target_datetime"],
     )
 
@@ -381,8 +444,24 @@ def run_scheduler(
     include_past: bool = False,
     poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS,
     poll_lookback_seconds: float = DEFAULT_POLL_LOOKBACK_SECONDS,
-) -> None:
-    """全ジョブを時刻順に実行する。``Ctrl+C`` で安全に停止できる。"""
+    on_jobs_executed: Optional[JobsExecutedCallback] = None,
+) -> bool:
+    """全ジョブを時刻順に実行する。``Ctrl+C`` で安全に停止できる。
+
+    ``on_jobs_executed`` を渡すと、ジョブ群を保存した直後に取得イベントの
+    リストを渡して呼び出す（例外は記録して取得を継続する）。
+
+    Returns:
+        bool: 全ジョブを実行し終えたら True、``Ctrl+C`` で停止したら False
+    """
+    def notify(events: list[dict[str, object]]) -> None:
+        if on_jobs_executed is None or not events:
+            return
+        try:
+            on_jobs_executed(events)
+        except Exception:
+            logger.exception("ジョブ実行後コールバックでエラーが発生しました（取得は継続）")
+
     if collection_delay_seconds < 0:
         raise ValueError("collection_delay_seconds は 0 以上で指定してください")
     if poll_interval_seconds <= 0:
@@ -412,7 +491,7 @@ def run_scheduler(
         ], output_dir, target_date)
     if not jobs and not (include_past and past_jobs):
         logger.warning("実行対象のジョブがありません")
-        return
+        return True
 
     logger.info(
         "時点別オッズスケジューラ開始: リアルタイム %d ジョブ、履歴復元 %d ジョブ",
@@ -438,6 +517,7 @@ def run_scheduler(
                 len(events),
                 len(paths),
             )
+            notify(events)
 
         next_poll_at = (
             max(
@@ -507,12 +587,15 @@ def run_scheduler(
                 check_freshness=True,
             )
             logger.info("ジョブ実行完了: %d 件、保存先 %d ファイル", len(events), len(paths))
+            notify(events)
     except KeyboardInterrupt:
         logger.info("時点別オッズスケジューラを停止しました")
+        return False
+    return True
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="JRA当日の発走時刻に連動して時点別オッズCSVを作成する")
+    parser = argparse.ArgumentParser(description="JRA当日の発走時刻に連動してレース別の時点別オッズCSVを作成する")
     parser.add_argument("--headed", action="store_true", help="出馬表取得用ブラウザを表示する")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--sid", default="KEIBA_AI", help="JVInit のソフトウェアID")
