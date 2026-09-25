@@ -79,7 +79,7 @@ Windowsタスクスケジューラを使う場合は、プログラムに `.venv
 
 ### 出馬表（発走時刻）
 
-`data/processed/races/YYYYMMDD_jra_today_schedule.csv`
+`data/processed/schedules/YYYYMMDD_jra_today_schedule.csv`
 
 主な列は次のとおりです。
 

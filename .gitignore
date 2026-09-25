@@ -4,3 +4,4 @@ logs/
 traces/
 screenshots/
 .env
+src/buying/.env

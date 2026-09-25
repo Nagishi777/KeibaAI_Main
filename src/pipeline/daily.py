@@ -1,7 +1,7 @@
 """レース当日の処理を1プロセスで順に実行する日次パイプライン。
 
     [1] JRA出馬表から当日の発走時刻を取得する
-        → data/processed/races/YYYYMMDD_jra_today_schedule.csv
+        → data/processed/schedules/YYYYMMDD_jra_today_schedule.csv
     [2] 発走時刻に合わせて 60m〜10s の各時点で JV-Link からオッズ・票数を取得する
         → data/processed/realtime_odds/YYYYMMDD/{race_id}_{券種}_realtimeodds.csv
     [3] 各レースの 5m 時点が保存されたら、そのレースを予測し購入処理を行う

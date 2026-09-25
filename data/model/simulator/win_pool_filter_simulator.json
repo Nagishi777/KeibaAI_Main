@@ -1,0 +1,16 @@
+{
+  "pool_threshold": 352530500.0,
+  "pool_quantile": 0.75,
+  "feature_cols": [
+    "odds_5m",
+    "inc_share_10m_5m"
+  ],
+  "min_ev": 1.1,
+  "odds_snapshot": "5m",
+  "train_start": "2024-01-06",
+  "train_end": "2026-07-26",
+  "n_train_rows": 118647,
+  "n_train_races": 8602,
+  "holdout_auc": 0.8302275698030159,
+  "num_trees": 15
+}

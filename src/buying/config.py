@@ -143,7 +143,7 @@ def load_settings(
             part.strip() for part in _get(values, "BUYING_ALLOWED_BET_TYPES", "win").split(",")
             if part.strip()
         ),
-        schedule_dir=Path(_get(values, "BUYING_SCHEDULE_DIR", "data/processed/races")),
+        schedule_dir=Path(_get(values, "BUYING_SCHEDULE_DIR", "data/processed/schedules")),
         odds_dir=Path(_get(values, "BUYING_ODDS_DIR", "data/processed/realtime_odds")),
         data_dir=Path(_get(values, "BUYING_DATA_DIR", "data/processed/buying")),
         login_url=_get(values, "BUYING_LOGIN_URL", "https://www.ipat.jra.go.jp/"),

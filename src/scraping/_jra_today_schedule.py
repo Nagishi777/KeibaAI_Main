@@ -12,7 +12,7 @@ JRA の「競馬メニュー > 出馬表」ページは CNAME を伴う JavaScri
 
 出力先（既定）::
 
-    data/processed/races/YYYYMMDD_jra_today_schedule.csv
+    data/processed/schedules/YYYYMMDD_jra_today_schedule.csv
 
 必要なパッケージ::
 
@@ -42,7 +42,7 @@ JST = ZoneInfo("Asia/Tokyo")
 BASE_URL = "https://www.jra.go.jp"
 THISWEEK_URL = f"{BASE_URL}/keiba/thisweek/"
 ACCESS_D_URL = f"{BASE_URL}/JRADB/accessD.html"
-DEFAULT_OUTPUT_DIR = Path("data/processed/races")
+DEFAULT_OUTPUT_DIR = Path("data/processed/schedules")
 
 # pw01dde + 区分2桁 + 場コード2桁 + 年4桁 + 回2桁 + 日2桁 + R2桁 + 日付8桁
 # URL 内では末尾の / が %2F にエンコードされる場合もある。

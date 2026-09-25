@@ -175,7 +175,7 @@ schtasks /Create /TN "KeibaAI Daily" /SC WEEKLY /D SAT,SUN /ST 08:30 `
 
 | パス | 内容 | 作成元 |
 | --- | --- | --- |
-| `data/processed/races/YYYYMMDD_jra_today_schedule.csv` | **当日のレース予定**（race_id・rt_key・競馬場・レース番号・発走時刻） | 出馬表取得 |
+| `data/processed/schedules/YYYYMMDD_jra_today_schedule.csv` | **当日のレース予定**（race_id・rt_key・競馬場・レース番号・発走時刻） | 出馬表取得 |
 | `data/processed/realtime_odds/YYYYMMDD/{race_id}_tansho_realtimeodds.csv` | 単勝オッズ・票数（60m〜10s の全時点。`snapshot_label` 列で区別） | オッズ取得 |
 | `data/processed/realtime_odds/YYYYMMDD/{race_id}_fukusho_realtimeodds.csv` | 複勝 | オッズ取得 |
 | `data/processed/realtime_odds/YYYYMMDD/{race_id}_wakuren_realtimeodds.csv` | 枠連 | オッズ取得 |
@@ -260,7 +260,7 @@ KeibaAI_Main/
 │   │   └── その他               本体パイプライン用（スタッキング、馬連・三連複、CV 等）。日次実行では import のみ
 │   └── cli_common.py            設定ファイル読込などの共通処理
 ├── data/
-│   ├── processed/races/         当日のレース予定
+│   ├── processed/schedules/     当日のレース予定
 │   ├── processed/realtime_odds/ 当日オッズ（日付フォルダ）
 │   ├── processed/odds_series/   学習用の月別締切前オッズ（外部で用意）
 │   ├── processed/horses/        着順（外部で用意）
