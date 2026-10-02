@@ -1,0 +1,3 @@
+# LightGBM のモデルファイルは CRLF になると読み込めない（src/models/trainer.py の
+# _check_model_line_endings 参照）。git による改行変換を無効化する。
+data/model/**/*.txt -text

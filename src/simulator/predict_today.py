@@ -45,7 +45,7 @@ import datetime as dt
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Optional, Tuple
+from typing import Dict, Iterable, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -86,6 +86,32 @@ REASON_EV = 'ev_below_threshold'     # EV がしきい値未満
 REASON_PROBA = 'proba_below_min'     # 予測確率が下限未満
 REASON_MAX_BETS = 'max_bets_per_race'  # 1レース点数上限で次点に漏れた
 REASON_KELLY = 'kelly_zero'          # Kelly が 0 円（賭けない）
+# 理由が複数あるときの区切り（例: ``pool_filter|ev_below_threshold``）
+REASON_SEP = '|'
+
+
+def _join_reasons(
+    flags: Dict[str, pd.Series], index: pd.Index
+) -> pd.Series:
+    """立っている見送り理由を ``flags`` の順に連結する。
+
+    Args:
+        flags: 理由ラベル -> その理由で見送るかの bool Series
+        index: 戻り値の index
+
+    Returns:
+        pd.Series: ``REASON_SEP`` 区切りの理由（購入する馬は ``REASON_BET``）
+    """
+    joined = pd.Series(REASON_BET, index=index, dtype='object')
+    for label, failed in flags.items():
+        hit = failed.reindex(index, fill_value=False).fillna(False).to_numpy()
+        if not hit.any():
+            continue
+        prefix = joined[hit]
+        joined[hit] = np.where(
+            prefix == REASON_BET, label, prefix + REASON_SEP + label
+        )
+    return joined
 
 
 @dataclass
@@ -204,11 +230,15 @@ def select_bets(
     passed_ev = work['ev'] >= threshold_ev
     passed_proba = work['pred_proba'] >= min_proba
 
-    reason = pd.Series(REASON_BET, index=work.index, dtype='object')
-    reason[~passed_proba] = REASON_PROBA
-    reason[~passed_ev] = REASON_EV
-    reason[~passed_pool] = REASON_POOL
-    work['skip_reason'] = reason
+    # 理由は上書きせず全て連結する（pool と EV の両方で落ちたことを残す）
+    work['skip_reason'] = _join_reasons(
+        {
+            REASON_POOL: ~passed_pool,
+            REASON_EV: ~passed_ev,
+            REASON_PROBA: ~passed_proba,
+        },
+        work.index,
+    )
 
     # [7] 1レース最大点数。確率の高い順に残す（extract_bet_rows と同じ基準）。
     candidate = work['skip_reason'] == REASON_BET

@@ -49,7 +49,7 @@ class LoadTodaySnapshotsTest(unittest.TestCase):
             features = attach_features(raw_frame)
             dates = available_dates(directory)
 
-        self.assertEqual(FEATURE_COLS, ("odds_5m", "inc_share_10m_5m"))
+        self.assertEqual(FEATURE_COLS, ("odds_5m", "inc_share_10m_5m", "pool_5m"))
         self.assertEqual(features["race_id"].unique().tolist(), ["202606040505"])
         self.assertEqual(features["odds_5m"].tolist(), [2.0, 8.0])
         # 投票額 = 0.8 * pool / odds → 10m: 400, 200 / 5m: 800, 200

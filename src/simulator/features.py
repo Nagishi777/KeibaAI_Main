@@ -6,11 +6,17 @@
     ``odds_5m``             5m時点の単勝オッズ（生の値。変換しない）＝市場の水準
     ``inc_share_10m_5m``    10m→5m の流入額がレース内で占めるシェア＝資金の勢い
 
-加えてレース選別に使う ``pool_5m``（5m時点のレース総投票額・円）を作る。
-``pool_5m`` は**特徴量ではなくフィルタ**である。レース内の全馬に同じ値が
-入るため馬の序列化に寄与せず、モデルに入れると回収率が -22〜-31ポイント
-悪化することが実測されている（spec §5.4）。列名も ``FEATURE_COLS`` から
-外し、誤ってモデル入力に混ざらないようにしてある。
+加えて ``pool_5m``（5m時点のレース総投票額・円）を作る。``pool_5m`` は
+**レース選別フィルタと特徴量の両方**に使う。
+
+WARNING (pool_5m を特徴量に入れることの既知のリスク / spec §5.4):
+    ``pool_5m`` をモデル入力に加えると回収率が **-22〜-31ポイント悪化**した
+    という実測がある。レース内の全馬に同じ値が入るため馬の序列化に寄与せず、
+    木が無駄な分割を消費して確率の校正が壊れる（AUC は変わらず回収率だけ
+    低下する）ため。レース内の序列化とレース間の選別は別の仕事であり、
+    プール規模は本来後者にのみ効く。
+    現在は利用者の明示的な指示によりこれを特徴量として有効にしている。
+    フィルタとしての役割（:func:`apply_pool_filter`）は従来どおり残る。
 
 本モジュールは学習側（:mod:`src.simulator.retrain`）と推論側
 （:mod:`src.simulator.predict_today`）の双方から呼ばれる。特徴量の定義を
@@ -51,11 +57,14 @@ ODDS_COL: str = f'odds_{DECISION_SNAPSHOT}'
 # 起点→判断時点の流入シェア
 INC_SHARE_COL: str = f'inc_share_{BASE_SNAPSHOT}_{DECISION_SNAPSHOT}'
 
-# モデル入力に使う特徴量（spec §3.2）。この2列以外を足してはならない。
-FEATURE_COLS: Tuple[str, ...] = (ODDS_COL, INC_SHARE_COL)
-
-# レース選別に使う列。特徴量ではない（spec §5.4）。
+# レース選別に使う列。特徴量としても使う（下記 FEATURE_COLS 参照）。
 POOL_COL: str = f'pool_{DECISION_SNAPSHOT}'
+
+# モデル入力に使う特徴量（spec §3.2 の2列 + pool_5m）。
+# NOTE: pool_5m は spec §5.4 で「特徴量にすると回収率が悪化する」と
+# 実測された列だが、利用者の指示により明示的にモデル入力へ含めている。
+# 列を増減したら再学習が必要（artifacts.load_params が不一致を検知する）。
+FEATURE_COLS: Tuple[str, ...] = (ODDS_COL, INC_SHARE_COL, POOL_COL)
 
 # 行を一意に決めるキー
 KEY_COLS: Tuple[str, str] = ('race_id', 'horse_number')
@@ -185,7 +194,7 @@ def drop_incomplete_rows(df: pd.DataFrame, *, context: str) -> pd.DataFrame:
     Raises:
         ValueError: 有効な行が1行も残らない場合
     """
-    cols = list(FEATURE_COLS) + [POOL_COL]
+    cols = list(dict.fromkeys(list(FEATURE_COLS) + [POOL_COL]))
     valid = df[cols].notna().all(axis=1)
     n_dropped = int((~valid).sum())
     if n_dropped:

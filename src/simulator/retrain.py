@@ -70,8 +70,9 @@ logger = logging.getLogger(__name__)
 BET_TYPE = 'win'
 TARGET_COL = 'target_win'
 
-# spec §5.2 で採用している分位点
-DEFAULT_POOL_QUANTILE: float = 0.75
+# 分位点。spec §5.2 の採用値は 0.75 だが、検証段階では対象レースが
+# 重賞級に限られて推奨 0 点が続くため、しきい値を緩めて 0.50 を使う。
+DEFAULT_POOL_QUANTILE: float = 0.50
 
 # 学習期間の末尾から切り出す holdout の月数（early stopping / 校正に使う）
 DEFAULT_HOLDOUT_MONTHS: int = 6
@@ -376,7 +377,7 @@ def _parse_args() -> argparse.Namespace:
                         help='学習終了年月 (YYYYMM)')
     parser.add_argument('--pool-quantile', type=float,
                         default=DEFAULT_POOL_QUANTILE,
-                        help=f'{POOL_COL} しきい値を取る分位点（既定 0.75）')
+                        help=f'{POOL_COL} しきい値を取る分位点（既定 {DEFAULT_POOL_QUANTILE}）')
     parser.add_argument('--holdout-months', type=int,
                         default=DEFAULT_HOLDOUT_MONTHS,
                         help='学習期間末尾から切り出す holdout の月数')

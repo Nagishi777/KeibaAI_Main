@@ -1,0 +1,313 @@
+{
+  "target_date": "2026-09-26",
+  "started_at": "2026-09-26T11:03:38",
+  "buying_mode": "live",
+  "model_ready": true,
+  "model_error": "",
+  "n_races": 24,
+  "first_post": "2026-09-26T09:45:00",
+  "last_post": "2026-09-26T16:30:00",
+  "scheduler_completed": true,
+  "decisions": [
+    {
+      "race_ids": [
+        "202606040804"
+      ],
+      "started_at": "2026-09-26T11:15:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 6,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T11:15:02"
+    },
+    {
+      "race_ids": [
+        "202609040804"
+      ],
+      "started_at": "2026-09-26T11:30:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 15,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T11:30:02"
+    },
+    {
+      "race_ids": [
+        "202606040805"
+      ],
+      "started_at": "2026-09-26T12:05:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 14,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T12:05:02"
+    },
+    {
+      "race_ids": [
+        "202609040805"
+      ],
+      "started_at": "2026-09-26T12:20:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 15,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T12:20:02"
+    },
+    {
+      "race_ids": [
+        "202606040806"
+      ],
+      "started_at": "2026-09-26T12:35:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 7,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T12:35:02"
+    },
+    {
+      "race_ids": [
+        "202609040806"
+      ],
+      "started_at": "2026-09-26T12:50:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 16,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T12:50:02"
+    },
+    {
+      "race_ids": [
+        "202606040807"
+      ],
+      "started_at": "2026-09-26T13:05:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 18,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T13:05:02"
+    },
+    {
+      "race_ids": [
+        "202609040807"
+      ],
+      "started_at": "2026-09-26T13:20:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 13,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T13:20:02"
+    },
+    {
+      "race_ids": [
+        "202606040808"
+      ],
+      "started_at": "2026-09-26T13:35:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 16,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T13:35:02"
+    },
+    {
+      "race_ids": [
+        "202609040808"
+      ],
+      "started_at": "2026-09-26T13:50:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 11,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T13:50:02"
+    },
+    {
+      "race_ids": [
+        "202606040809"
+      ],
+      "started_at": "2026-09-26T14:05:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 8,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T14:05:02"
+    },
+    {
+      "race_ids": [
+        "202609040809"
+      ],
+      "started_at": "2026-09-26T14:20:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 8,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T14:20:02"
+    },
+    {
+      "race_ids": [
+        "202606040810"
+      ],
+      "started_at": "2026-09-26T14:45:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 16,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T14:45:02"
+    },
+    {
+      "race_ids": [
+        "202609040810"
+      ],
+      "started_at": "2026-09-26T15:00:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 14,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T15:00:02"
+    },
+    {
+      "race_ids": [
+        "202606040811"
+      ],
+      "started_at": "2026-09-26T15:25:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 14,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T15:25:02"
+    },
+    {
+      "race_ids": [
+        "202609040811"
+      ],
+      "started_at": "2026-09-26T15:40:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 16,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T15:40:02"
+    },
+    {
+      "race_ids": [
+        "202606040812"
+      ],
+      "started_at": "2026-09-26T16:05:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 16,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T16:05:02"
+    },
+    {
+      "race_ids": [
+        "202609040812"
+      ],
+      "started_at": "2026-09-26T16:25:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 16,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-09-26T16:25:02"
+    }
+  ],
+  "retrain": {
+    "model_path": "data\\model\\simulator\\win_pool_filter.txt",
+    "pool_threshold": 239791000.0,
+    "pool_quantile": 0.5,
+    "n_rows": 118647,
+    "n_races": 8602,
+    "n_fit_rows": 94930,
+    "n_holdout_rows": 23717,
+    "train_start": "2024-01-06",
+    "train_end": "2026-07-26",
+    "holdout_start": "2026-01-26",
+    "holdout_auc": 0.8306011484384155,
+    "num_trees": 17,
+    "importance": [
+      [
+        "odds_5m",
+        1963353.7924346924
+      ],
+      [
+        "inc_share_10m_5m",
+        152211.419631958
+      ],
+      [
+        "pool_5m",
+        7922.941856384277
+      ]
+    ]
+  },
+  "errors": [],
+  "finished_at": "2026-09-26T17:00:02"
+}

@@ -353,9 +353,9 @@ class RaceDecisionWorker(threading.Thread):
                     stopping = True
                     break
                 batch.append(extra)
-            self._handle(batch)
+            self._process_batch(batch)
 
-    def _handle(self, batch: list[str]) -> None:
+    def _process_batch(self, batch: list[str]) -> None:
         try:
             record = self._decide(batch)
         except Exception as exc:

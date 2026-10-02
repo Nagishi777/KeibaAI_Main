@@ -31,12 +31,12 @@ model:
 
 # 賭け金の計算（docs/report/pool_filter_condition_spec.md §6）
 evaluation:
-  initial_bankroll: 100000     # Kelly の基準資金（円）
+  initial_bankroll: 5000     # Kelly の基準資金（円）
   use_kelly_criterion: true
   kelly_fraction: 0.1          # fractional Kelly
-  max_bet: 5000                # 1点あたりの上限（円）。実際の購入上限は .env の BUYING_MAX_* も効く
+  max_bet: 500                # 1点あたりの上限（円）。実際の購入上限は .env の BUYING_MAX_* も効く
   min_proba_win: 0.0
-  max_bets_per_race_win: 3
+  max_bets_per_race_win: 2
 
 # main.py の日次実行
 pipeline:
