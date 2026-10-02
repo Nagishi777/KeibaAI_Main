@@ -1,7 +1,35 @@
-.venv
+# --- Python build / cache ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# pytest cache
+.pytest_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Virtual environment
+.venv/
+
+# SQLite DB
 *.sqlite3
+
+# Logs / traces / screenshots
 logs/
 traces/
 screenshots/
+
+# Environment files
 .env
 src/buying/.env
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+
+# MyPy / coverage / profiling
+.mypy_cache/
+.coverage
+htmlcov/
