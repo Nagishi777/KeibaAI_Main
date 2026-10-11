@@ -1,7 +1,87 @@
-.venv
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-workspace
+*.sublime-project
+
+# Environment Variables and Secrets
+.env
+.env.local
+.env.*.local
+src/buying/.env
+src/**/.env
+*.pem
+*.key
+credentials.json
+config.json
+
+# Database Files
 *.sqlite3
+*.db
+*.sqlite
+*.sqlite-journal
+
+# Logs and Traces
 logs/
 traces/
+*.log
+*.out
+
+# Screenshots and Media
 screenshots/
-.env
-src/buying/.env
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# Temporary Files
+*.tmp
+*.bak
+.temp/
+tmp/
+
+# IDE-specific
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.hypothesis/
+
+# Data Files (keeping models safe)
+data/
+*.csv
+*.xlsx
+*.xls
+
+# Model Artifacts
+models/
+*.pkl
+*.pickle
+*.joblib
+
+# OS-specific
+Thumbs.db
+.DS_Store
+*.lnk
