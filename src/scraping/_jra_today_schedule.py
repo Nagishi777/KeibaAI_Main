@@ -40,7 +40,11 @@ logger = logging.getLogger(__name__)
 
 JST = ZoneInfo("Asia/Tokyo")
 BASE_URL = "https://www.jra.go.jp"
+TOP_URL = f"{BASE_URL}/"
 THISWEEK_URL = f"{BASE_URL}/keiba/thisweek/"
+# 当日はトップページに開催中の各場リンクが出る。thisweek は「今週の競馬」
+# であり、開催日当日には翌日分へ繰り上がることがあるため後段に置く。
+ENTRY_URLS = (TOP_URL, THISWEEK_URL)
 ACCESS_D_URL = f"{BASE_URL}/JRADB/accessD.html"
 DEFAULT_OUTPUT_DIR = Path("data/processed/schedules")
 
@@ -189,10 +193,21 @@ def parse_post_time(html: str) -> Optional[dt.time]:
 
 
 def parse_race_name(html: str) -> str:
-    """出馬表のレース名を取得する。取得不能時は空文字列を返す。"""
+    """出馬表のレース名を取得する。取得不能時は空文字列を返す。
+
+    最初の ``<h2>`` はスクリーンリーダー向けの ``sr-only`` 見出し
+    （「検索ウィンドウ」など）であるため、レース名は ``.race_name`` から読む。
+    """
     soup = BeautifulSoup(html, "html.parser")
-    heading = soup.find("h2")
-    return heading.get_text(" ", strip=True) if heading else ""
+    element = soup.select_one(".race_name")
+    if element is not None:
+        return element.get_text(" ", strip=True)
+    for heading in soup.find_all("h2"):
+        classes = heading.get("class") or []
+        if "sr-only" in classes:
+            continue
+        return heading.get_text(" ", strip=True)
+    return ""
 
 
 def build_schedule_record(
@@ -251,22 +266,28 @@ async def _collect_schedule(
         context = await browser.new_context(locale="ja-JP")
         try:
             page = await context.new_page()
-            thisweek_html = await _get_page_html(page, THISWEEK_URL, timeout_ms)
-            entry_meetings = parse_meeting_cnames(thisweek_html, target_text)
-            if not entry_meetings:
-                # HTML構造変更時のフォールバックとしてCNAMEの直接走査を使う。
-                entry_races = parse_race_cnames(thisweek_html, target_text)
-                entry_meetings = [
-                    {
-                        "access_d_cname": race["access_d_cname"],
-                        "venue_code": race["venue_code"],
-                        "year": race["year"],
-                        "kai": race["kai"],
-                        "day": race["day"],
-                        "race_date": race["race_date"],
-                    }
-                    for race in entry_races
-                ]
+            entry_meetings: list[dict[str, str | int]] = []
+            for entry_url in ENTRY_URLS:
+                entry_html = await _get_page_html(page, entry_url, timeout_ms)
+                entry_meetings = parse_meeting_cnames(entry_html, target_text)
+                if not entry_meetings:
+                    # HTML構造変更時のフォールバックとしてCNAMEの直接走査を使う。
+                    entry_races = parse_race_cnames(entry_html, target_text)
+                    entry_meetings = [
+                        {
+                            "access_d_cname": race["access_d_cname"],
+                            "venue_code": race["venue_code"],
+                            "year": race["year"],
+                            "kai": race["kai"],
+                            "day": race["day"],
+                            "race_date": race["race_date"],
+                        }
+                        for race in entry_races
+                    ]
+                if entry_meetings:
+                    logger.info("開催リンクの取得元: %s", entry_url)
+                    break
+                logger.debug("対象日のリンクなし: %s", entry_url)
             if not entry_meetings:
                 logger.warning("対象日の出馬表リンクが見つかりません: %s", target_date)
                 return []

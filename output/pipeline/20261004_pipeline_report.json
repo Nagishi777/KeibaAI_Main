@@ -1,0 +1,480 @@
+{
+  "target_date": "2026-10-04",
+  "started_at": "2026-10-04T08:31:06",
+  "buying_mode": "live",
+  "model_ready": true,
+  "model_error": "",
+  "n_races": 24,
+  "first_post": "2026-10-04T09:50:00",
+  "last_post": "2026-10-04T16:30:00",
+  "scheduler_completed": true,
+  "decisions": [
+    {
+      "race_ids": [
+        "202608040201"
+      ],
+      "started_at": "2026-10-04T09:48:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 8,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T09:48:02"
+    },
+    {
+      "race_ids": [
+        "202605040201"
+      ],
+      "started_at": "2026-10-04T10:03:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 1,
+        "n_horses": 12,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T10:03:02"
+    },
+    {
+      "race_ids": [
+        "202608040202"
+      ],
+      "started_at": "2026-10-04T10:18:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 9,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T10:18:02"
+    },
+    {
+      "race_ids": [
+        "202605040202"
+      ],
+      "error": "BrowserContractError: 操作要素が見つからないか一意ではありません: ('ログイン', '送信')"
+    },
+    {
+      "race_ids": [
+        "202608040203"
+      ],
+      "started_at": "2026-10-04T10:48:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 16,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T10:48:02"
+    },
+    {
+      "race_ids": [
+        "202605040203"
+      ],
+      "started_at": "2026-10-04T11:03:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 16,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T11:03:02"
+    },
+    {
+      "race_ids": [
+        "202608040204"
+      ],
+      "started_at": "2026-10-04T11:18:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 16,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T11:18:02"
+    },
+    {
+      "race_ids": [
+        "202605040204"
+      ],
+      "started_at": "2026-10-04T11:33:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 14,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T11:33:02"
+    },
+    {
+      "race_ids": [
+        "202608040205"
+      ],
+      "started_at": "2026-10-04T12:08:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 12,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T12:08:02"
+    },
+    {
+      "race_ids": [
+        "202605040205"
+      ],
+      "started_at": "2026-10-04T12:23:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 11,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T12:23:02"
+    },
+    {
+      "race_ids": [
+        "202608040206"
+      ],
+      "started_at": "2026-10-04T12:38:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 16,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T12:38:02"
+    },
+    {
+      "race_ids": [
+        "202605040206"
+      ],
+      "started_at": "2026-10-04T12:53:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 1,
+        "n_horses": 14,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T12:53:02"
+    },
+    {
+      "race_ids": [
+        "202608040207"
+      ],
+      "started_at": "2026-10-04T13:08:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 18,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T13:08:02"
+    },
+    {
+      "race_ids": [
+        "202605040207"
+      ],
+      "error": "BrowserContractError: 操作要素が見つからないか一意ではありません: ('ログイン', '送信')"
+    },
+    {
+      "race_ids": [
+        "202608040208"
+      ],
+      "started_at": "2026-10-04T13:38:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 0,
+        "n_horses": 16,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T13:38:02"
+    },
+    {
+      "race_ids": [
+        "202605040208"
+      ],
+      "started_at": "2026-10-04T13:59:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 1,
+        "n_horses": 17,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T13:59:02"
+    },
+    {
+      "race_ids": [
+        "202608040209"
+      ],
+      "started_at": "2026-10-04T14:13:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 1,
+        "n_horses": 18,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T14:13:02"
+    },
+    {
+      "race_ids": [
+        "202605040209"
+      ],
+      "started_at": "2026-10-04T14:33:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 1,
+        "n_horses": 15,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T14:33:02"
+    },
+    {
+      "race_ids": [
+        "202608040210"
+      ],
+      "error": "BrowserContractError: 操作要素が見つからないか一意ではありません: ('ログイン', '送信')"
+    },
+    {
+      "race_ids": [
+        "202605040210"
+      ],
+      "started_at": "2026-10-04T15:08:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 1,
+        "n_horses": 16,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T15:08:02"
+    },
+    {
+      "race_ids": [
+        "202608040211"
+      ],
+      "started_at": "2026-10-04T15:28:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 1,
+        "n_horses": 18,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T15:28:02"
+    },
+    {
+      "race_ids": [
+        "202605040211"
+      ],
+      "started_at": "2026-10-04T15:43:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 1,
+        "n_horses": 17,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T15:43:02"
+    },
+    {
+      "race_ids": [
+        "202608040212"
+      ],
+      "started_at": "2026-10-04T16:08:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 1,
+        "n_horses": 18,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T16:08:02"
+    },
+    {
+      "race_ids": [
+        "202605040212"
+      ],
+      "started_at": "2026-10-04T16:28:02",
+      "prediction": {
+        "n_races": 1,
+        "n_races_passed_pool": 1,
+        "n_horses": 16,
+        "n_bets": 0,
+        "total_bet_yen": 0.0
+      },
+      "intents": [],
+      "finished_at": "2026-10-04T16:28:02"
+    }
+  ],
+  "retrain": {
+    "model_path": "data\\model\\simulator\\win_anaba.txt",
+    "n_rows": 159560,
+    "n_races": 11568,
+    "n_fit_rows": 136654,
+    "n_holdout_rows": 22906,
+    "train_start": "2023-01-05",
+    "train_end": "2026-07-26",
+    "holdout_start": "2026-01-26",
+    "holdout_auc": 0.845512857172477,
+    "num_trees": 135,
+    "importance": [
+      [
+        "inc_share_5_late",
+        2554956.5978393555
+      ],
+      [
+        "log_odds_late",
+        350701.16522216797
+      ],
+      [
+        "mkt_late",
+        208936.6554222107
+      ],
+      [
+        "mkt_ratio_to_fav",
+        91323.28654098511
+      ],
+      [
+        "drift_30_10",
+        36445.47869682312
+      ],
+      [
+        "fav_strength",
+        29883.93240594864
+      ],
+      [
+        "accel",
+        27930.77924180031
+      ],
+      [
+        "drift_5_late_rel",
+        25171.96926498413
+      ],
+      [
+        "pool_growth_5_late",
+        24713.253905296326
+      ],
+      [
+        "drift_60_late",
+        23395.364538669586
+      ],
+      [
+        "drift_10_5",
+        22557.892799794674
+      ],
+      [
+        "log_odds_5m",
+        22528.498881340027
+      ],
+      [
+        "drift_10_5_rel",
+        22354.50785589218
+      ],
+      [
+        "drift_60_30",
+        22129.476212978363
+      ],
+      [
+        "hhi_late",
+        21806.103402376175
+      ],
+      [
+        "inc_ratio",
+        20682.25675678253
+      ],
+      [
+        "drift_5_late",
+        14682.870252609253
+      ],
+      [
+        "log_pool_late",
+        12895.145667850971
+      ],
+      [
+        "inc_vs_mkt",
+        12615.36575961113
+      ],
+      [
+        "log_pool_per_horse",
+        10747.935248851776
+      ],
+      [
+        "mkt_rank_late",
+        5977.402347564697
+      ],
+      [
+        "field_size",
+        3656.1068296432495
+      ]
+    ],
+    "pool_quantiles": [
+      [
+        "q0.00",
+        198231000.0
+      ],
+      [
+        "q0.25",
+        442459500.0
+      ],
+      [
+        "q0.50",
+        550400500.0
+      ],
+      [
+        "q0.75",
+        743465500.0
+      ],
+      [
+        "q0.90",
+        1132031500.0000002
+      ],
+      [
+        "q1.00",
+        65620306000.0
+      ]
+    ]
+  },
+  "errors": [
+    "decision 202605040202: BrowserContractError: 操作要素が見つからないか一意ではありません: ('ログイン', '送信')",
+    "decision 202605040207: BrowserContractError: 操作要素が見つからないか一意ではありません: ('ログイン', '送信')",
+    "decision 202608040210: BrowserContractError: 操作要素が見つからないか一意ではありません: ('ログイン', '送信')"
+  ],
+  "finished_at": "2026-10-04T17:00:05"
+}

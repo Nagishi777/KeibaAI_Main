@@ -1,1 +1,3 @@
-﻿race_id,horse_number,pred_proba,odds_5m,ev,bet_amount,pool_5m,inc_share_10m_5m
+﻿race_id,horse_number,pred_proba,odds_used,ev,ev_rank,bet_amount,odds_late,odds_5m_raw,drift_5_late,inc_share_5_late,pool_late_yen,pool_pctile,mkt_rank_late,field_size,decision_snapshot_used
+202606040812,16,0.009786476868327402,139.0,1.3603202846975089,1.0,100.0,139.0,149.7,-0.07415935829489083,0.007394898852091652,71251100.0,,13.0,16.0,2m
+202609040812,16,0.06135291033036183,18.1,1.1104876769795493,1.0,100.0,18.1,21.3,-0.1627951344435993,0.0730412163216485,96318300.0,,7.0,16.0,2m

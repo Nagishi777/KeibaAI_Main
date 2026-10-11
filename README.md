@@ -4,11 +4,28 @@ JRA のレース当日に、次の4つを1本のプログラム（`main.py`）�
 
 1. 当日の発走時刻を取得する
 2. 発走時刻に合わせて JRA-VAN（JV-Link）から単勝・複勝・枠連のオッズと票数を取得する
-3. 各レースの発走5分前のオッズで勝率を予測し、購入ルールに従って即PATで馬券を買う
+3. 各レースの発走**2分前**のオッズで勝率を予測し、購入ルールに従って即PATで馬券を買う
 4. 全レース終了後にモデルを再学習する
 
-> **IMPORTANT**
-> 予測条件（`docs/report/pool_filter_condition_spec.md`）は 1分前オッズで検証された調査結果を、判断時点を5分前に前倒しして使っています。**5分前での成績は未検証**で、的中率が低く払戻の振れ幅が大きい戦略です。実購入（live）の前に、必ず paper / dry-run で動作と成績を確認してください。
+採用している戦略は「穴馬戦略」（締切直前の資金流入 × 高オッズ）です。
+検証内容は `docs/report/anaba_strategy_report/anaba_strategy_report.md` にあります。
+
+> **IMPORTANT: 総投票額の下限は当日データ用に 0.4億円へ変更しています**
+> 学習データ（JV-Link 履歴 `0B41`）と当日データ（速報 `0B31`）で `hyosu_total` の
+> スケールが **9〜13倍**違います（競馬場を揃えても同じ）。そのため履歴で検証した
+> 5億円を当日データに当てると**1レースも通りません**。
+> 現在は当日スケールで「日内上位50%」に相当する **0.4億円**を既定にしています。
+> **ただしこの値の根拠は1開催日22レースのみで信頼性は低く、開催を重ねたら
+> 測り直す必要があります。** 本筋は当日取得を履歴と同じ `0B41` に揃えることです。
+> 詳細は `docs/report/pool_by_race_number_report.md` §6 と §9 を参照してください。
+
+> **IMPORTANT: この条件の組み合わせは未検証です**
+> レポートの検証値（回収率136.98% / 95%CI [109.3, 161.4]）は
+> EV≥1.20・1レース最大3点・**1分前**判断・fractional Kelly の構成です。
+> 本実装は EV≥1.05・1レース1点・**2分前**判断・Flat100円に総投票額フィルタを
+> 加えた別の構成で、この組み合わせ自体の成績は検証されていません。
+> 的中率5%・平均40倍の高分散戦略です。実購入（live）の前に必ず paper / dry-run で
+> 動作を確認してください。
 
 ---
 
@@ -37,7 +54,7 @@ JRA のレース当日に、次の4つを1本のプログラム（`main.py`）�
 | 08:30 | `main.py` 起動（タスクスケジューラ） | `main.py` |
 | 08:30 | JRA 出馬表から全競馬場・全レースの発走時刻を取得し CSV 保存 | `src/scraping/_jra_today_schedule.py` |
 | 09:05〜 | 各レースの **60m・30m・10m・5m・4m・3m・2m・1m・10s 前**に JV-Link からオッズ・票数を取得し、レース別 CSV に追記 | `src/scraping/realtime_odds.py` |
-| 各レースの 5分前 | 5m の保存が終わったレースを判断スレッドへ渡し、10m・5m から特徴量を作成 → 勝率予測 → EV・Kelly で買い目と金額を決定 → 安全審査 → 即PATで購入 | `src/pipeline/daily.py` → `src/simulator/` → `src/buying/` |
+| 各レースの 2分前 | 2m の保存が終わったレースを判断スレッドへ渡し、60m〜5m と 2m から22列の特徴量を作成 → 勝率予測 → 購入条件の判定 → Flat100円 → 安全審査 → 即PATで購入 | `src/pipeline/daily.py` → `src/simulator/` → `src/buying/` |
 | 16:24:50 | 最終レースの 10s 前の取得で、オッズ取得が終了 | |
 | 16:55 | 最終レース発走 + 30分で再学習し、モデルを更新（次の開催日から使われる） | `src/simulator/retrain.py` |
 
@@ -45,14 +62,16 @@ JRA のレース当日に、次の4つを1本のプログラム（`main.py`）�
 flowchart LR
     A[main.py 8:30起動] --> B[出馬表取得<br/>races/YYYYMMDD_jra_today_schedule.csv]
     B --> C[時点別オッズ取得<br/>60m〜10s・JV-Link]
-    C -->|各レース 5m 保存| D[判断スレッド<br/>予測 → 購入]
+    C -->|各レース 2m 保存| D[判断スレッド<br/>予測 → 購入]
     D --> E[(output/simulator<br/>購入台帳・監査ログ)]
     C -->|最終レース 10s 後| F[最終発走+30分まで待機]
-    F --> G[再学習<br/>data/model/simulator]
+    F --> G[再学習<br/>data/model/win]
 ```
 
 - オッズ取得（JV-Link）はメインスレッド、予測・購入は別スレッドで動きます。購入のブラウザ操作に時間がかかっても、他レースのオッズ取得は止まりません。
-- 5分前のオッズは「発走5分前の時刻までに JRA-VAN が発表した最新値」です。保存は5分前の約2秒後に完了し、購入の送信期限（既定: 発走2分前）までの約3分で予測と購入を行います。
+- 2分前のオッズは「発走2分前の時刻までに JRA-VAN が発表した最新値」です。保存は2分前の約2秒後に完了し、購入の送信期限（既定: 発走**90秒**前）までの約30秒で予測と購入を行います。
+- 送信期限は判断時点（120秒前）より後ろでなければなりません。`BUYING_SUBMIT_DEADLINE_LEAD_SECONDS` を 120 以上にすると判断と同時に期限切れになり全ての購入が見送られるため、起動時に設定エラーで停止します。
+- 2m の取得に失敗したレースは 3m → 4m の順で代用し、実際に使った時点を CSV の `decision_snapshot_used` 列に残します。
 
 ---
 
@@ -86,14 +105,20 @@ python -m venv .venv
 
 ```yaml
 pipeline:
-  model_filename: simulator/win_pool_filter.txt
-  retrain_start_period: '202401'   # 再学習に使う最初の年月（終わりは実行日の月）
+  model_filename: win/win_anaba.txt
+  retrain_start_period: '202301'   # 1m が使えるのは2023年以降（§9 参照）
   retrain_delay_minutes: 30        # 最終レース発走から再学習を始めるまでの分数
-evaluation:
-  kelly_fraction: 0.1              # fractional Kelly
-  initial_bankroll: 100000         # Kelly の基準資金（円）
-  max_bet: 5000                    # 1点あたりの上限（円）
-  max_bets_per_race_win: 3         # 1レースの最大点数
+
+# 購入条件。すべて src/simulator/strategy.py の既定値を上書きできる。
+strategy:
+  min_ev: 1.05               # EV = 予測確率 × 2mオッズ の下限
+  odds_min: 10.0             # 2mオッズの下限
+  odds_max: 150.0            # 2mオッズの上限
+  max_drift: -0.05           # log(2mオッズ / 5mオッズ) の上限（負=オッズが下がった）
+  min_pool_yen: 40000000     # 2m時点の総投票額の下限（当日スケールで0.4億円）
+  min_pool_pctile: null      # 日内分位点で絞る場合に設定（レース単位運用では使えない）
+  max_bets_per_race: 1       # 期待値最大の1頭のみ
+  stake_yen: 100             # Flat ベット（1点100円）
 ```
 
 `src/buying/.env` の主な項目（詳細は `env.example` と `src/buying/README.md`）:
@@ -105,18 +130,20 @@ evaluation:
 | `BUYING_KILL_SWITCH` | `true` の間は一切購入しない | `true` |
 | `BUYING_MAX_BET_YEN` / `_RACE_YEN` / `_DAY_YEN` / `_SESSION_YEN` | 1点・1レース・1日・1回の購入処理あたりの上限（円）。超えるとレースごと見送り | すべて 100 |
 | `BUYING_MAX_BETS_PER_RACE` | 1レースの最大点数。超えるとレースごと見送り | 1 |
-| `BUYING_SUBMIT_DEADLINE_LEAD_SECONDS` | 発走何秒前を送信期限とするか | 120 |
+| `BUYING_SUBMIT_DEADLINE_LEAD_SECONDS` | 発走何秒前を送信期限とするか。判断時点（120秒前）より小さい値が必須 | 90 |
 | `BUYING_MAX_ODDS_AGE_SECONDS` | 判断に使うオッズの鮮度上限（秒） | 180 |
 
 ### 2.4 必要なデータ
 
 | データ | 場所 | 用途 | 作り方 |
 | --- | --- | --- | --- |
-| 学習済みモデル | `data/model/simulator/win_pool_filter.txt`、`_calibrator.pkl`、`_simulator.json` | 当日の予測 | `python main.py --retrain-only`（下の2つが必要） |
+| 学習済みモデル | `data/model/win/win_anaba.txt`、`_calibrator.pkl`、`_simulator.json` | 当日の予測 | `python main.py --retrain-only`（下の2つが必要） |
 | 月別締切前オッズ | `data/processed/odds_series/YYYYMM_odds_series_tansho.csv` | 再学習の特徴量 | **本リポジトリ外**（`odds_series_scraper`） |
 | 着順 | `data/processed/horses/*_horses.csv` | 再学習のラベル | **本リポジトリ外** |
 
-月別締切前オッズには `race_id, date, umaban, odds_win_10m, hyosu_total_10m, odds_win_5m, hyosu_total_5m` の列が、着順には `race_id, horse_number, finish_position` の列が必要です。
+月別締切前オッズには `race_id, date, umaban` と、`60m / 30m / 10m / 5m / 1m` 各時点の
+`odds_win_{時点}` / `hyosu_total_{時点}` の列が必要です。着順には
+`race_id, horse_number, finish_position` の列が必要です。
 
 モデルが無い日は、`main.py` は予測・購入を行わずに、オッズ取得と再学習だけを行います（ログに ERROR が出ます）。
 
@@ -152,7 +179,7 @@ schtasks /Create /TN "KeibaAI Daily" /SC WEEKLY /D SAT,SUN /ST 08:30 `
 | `--no-retrain` / `--retrain-only` | 再学習をしない / 再学習だけ行う |
 | `--retrain-start-period YYYYMM` | 再学習の開始年月（既定: `config.yaml` の値） |
 | `--retrain-delay-minutes N` | 最終レース発走から再学習までの分数（既定: 30） |
-| `--min-ev X` | EV しきい値（既定: モデルと一緒に保存された値。通常 1.10） |
+| `--min-ev X` | EV しきい値（既定: `config.yaml` の `strategy.min_ev`。通常 1.05） |
 | `--model-filename PATH` | `data/model` 配下のモデルファイル名 |
 | `--include-past` | 起動が遅れて過ぎた取得時点を、JV-Link の時系列オッズから復元する |
 | `--headed` | 出馬表取得用ブラウザを表示する |
@@ -180,11 +207,11 @@ schtasks /Create /TN "KeibaAI Daily" /SC WEEKLY /D SAT,SUN /ST 08:30 `
 | `data/processed/realtime_odds/YYYYMMDD/{race_id}_fukusho_realtimeodds.csv` | 複勝 | オッズ取得 |
 | `data/processed/realtime_odds/YYYYMMDD/{race_id}_wakuren_realtimeodds.csv` | 枠連 | オッズ取得 |
 | `data/processed/realtime_odds/YYYYMMDD/YYYYMMDD_scheduler_events.csv` | 各取得時点の**実行記録**（取得時刻・鮮度・状態）。購入時の安全審査にも使う | オッズ取得 |
-| `output/simulator/YYYYMMDD_all.csv` | 全馬の予測（予測確率・5mオッズ・EV・賭け金・見送り理由） | 予測 |
+| `output/simulator/YYYYMMDD_all.csv` | 全馬の予測（予測確率・2mオッズ・ドリフト・総投票額・EV・賭け金・**どのフィルタで外れたか**） | 予測 |
 | `output/simulator/YYYYMMDD_bets.csv` | 推奨買い目だけ | 予測 |
 | `data/processed/buying/buying_ledger.sqlite3` | 購入台帳（同じ買い目の二重購入を防ぐ） | 購入 |
 | `data/processed/buying/logs/YYYYMMDD_buying.jsonl` | 購入の監査ログ（安全審査で見送った理由を含む。認証情報はマスク） | 購入 |
-| `data/model/simulator/win_pool_filter.txt` ほか2ファイル | 学習済みモデル・確率校正器・運用パラメータ | 再学習 |
+| `data/model/win/win_anaba.txt` ほか2ファイル | 学習済みモデル・確率校正器・運用パラメータ | 再学習 |
 | `output/pipeline/YYYYMMDD_pipeline_report.json` | 日次レポート（レース数、レースごとの予測・購入結果、再学習結果、エラー） | main.py |
 | `logs/pipeline/YYYYMMDD_pipeline.log` | 日次の実行ログ（画面に出る内容と同じ） | main.py |
 
@@ -236,16 +263,17 @@ KeibaAI_Main/
 │   │   ├── _jvlink_o1.py        JV-Link 速報オッズ O1 レコードの取得・解析
 │   │   └── _netkeiba_today_fetcher.py  未使用（参照先モジュールが無く import できない）
 │   ├── simulator/               ── 予測と再学習
-│   │   ├── features.py          特徴量 odds_5m / inc_share_10m_5m とレース選別列 pool_5m の定義
-│   │   ├── realtime_loader.py   当日のレース別オッズ CSV から 10m・5m を読む
-│   │   ├── predict_today.py     予測 → レース選別 → EV → Kelly で買い目と金額を決める
-│   │   ├── retrain.py           過去データで LightGBM を再学習し、しきい値と一緒に保存
-│   │   ├── artifacts.py         モデルと運用パラメータ（しきい値・特徴量列）の保存・検証
+│   │   ├── features.py          22列の特徴量の定義（学習=1m / 当日=2m を共通化）
+│   │   ├── strategy.py          購入条件（EV・オッズ帯・ドリフト・総投票額）と Flat ベット
+│   │   ├── realtime_loader.py   当日のレース別オッズ CSV から 60m〜5m・2m を読む
+│   │   ├── predict_today.py     予測 → 購入条件の判定 → 推奨 CSV（見送り理由つき）
+│   │   ├── retrain.py           過去データで LightGBM を再学習し、確率を校正して保存
+│   │   ├── artifacts.py         モデルと運用パラメータ（特徴量列・学習時点）の保存・検証
 │   │   ├── odds_series_loader.py  学習用の月別締切前オッズの読込・票数逆算
 │   │   └── dataset.py           着順（学習ラベル）の読込
 │   ├── buying/                  ── 即PAT 自動購入（詳細は src/buying/README.md）
 │   │   ├── strategy.py          予測結果を購入指示（BetIntent）へ変換
-│   │   ├── risk.py              購入前の安全審査（締切・金額上限・オッズ鮮度・5m 証跡）
+│   │   ├── risk.py              購入前の安全審査（締切・金額上限・オッズ鮮度・2m 証跡）
 │   │   ├── service.py           安全審査 → 台帳予約 → 画面操作 → 結果記録
 │   │   ├── browser/             Playwright による即PAT 画面操作
 │   │   ├── ledger.py            SQLite 購入台帳（冪等性・二重購入防止）
@@ -265,7 +293,7 @@ KeibaAI_Main/
 │   ├── processed/odds_series/   学習用の月別締切前オッズ（外部で用意）
 │   ├── processed/horses/        着順（外部で用意）
 │   ├── processed/buying/        購入台帳・監査ログ
-│   └── model/simulator/         学習済みモデル
+│   └── model/win/               学習済みモデル
 ├── output/                      予測結果・日次レポート
 ├── logs/                        実行ログ
 ├── docs/                        仕様書・実装レポート・取得マニュアル
@@ -276,17 +304,40 @@ KeibaAI_Main/
 
 ## 7. 予測モデルと購入ルール
 
+戦略の核心は1行で書けます。
+
+> **締切直前に、10〜150倍で、直前の数分間にオッズが下がった馬を買う。**
+
 | 項目 | 内容 |
 | --- | --- |
-| 特徴量（2列） | `odds_5m`（5分前の単勝オッズ）、`inc_share_10m_5m`（10分前→5分前に入った資金のうち、その馬が占める割合） |
-| モデル | LightGBM 二値分類（1着か否か）＋ isotonic 確率校正。木は小さく固定（`num_leaves=15`, `max_depth=4`） |
-| レース選別 | 5分前のレース総投票額 `pool_5m` が、学習期間の上位25%のしきい値（q0.75）未満のレースは見送る |
-| 買う馬 | `EV = 予測確率 × 5分前オッズ ≥ 1.10` |
-| 賭け金 | fractional Kelly（`kelly_fraction=0.1`、基準資金 10万円、1点上限 5,000円）を100円単位に切り捨て。1レース最大3点 |
-| 実際の上限 | `.env` の `BUYING_MAX_*` を超える買い目を含むレースは、**減額せずにレースごと見送る**。初期値（1点100円・1レース1点）のままだと、Kelly で100円を超える金額や2点以上の推奨が出たレースは購入されない |
+| 特徴量（22列） | すべて市場スナップショット由来。中核は `inc_share_5_late`（5m→2m に入った新規資金のうちその馬が占める割合）、`log_odds_late`、`mkt_late`、`mkt_ratio_to_fav` の4列で、importance の約9割を占める |
+| モデル | LightGBM 二値分類（1着か否か）＋ isotonic 確率校正（`num_leaves=31`, `max_depth=5`, `lambda_l2=5.0`） |
+| 学習 | 2023年1月以降の `60m/30m/10m/5m/1m`。末尾6ヶ月を holdout にして early stopping と確率校正に使う |
+| 買う馬（全条件を満たすこと） | ① `EV = 予測確率 × 2mオッズ ≥ 1.05`<br>② `2mオッズ` が 10倍以上 150倍以下<br>③ `log(2mオッズ / 5mオッズ) ≤ -0.05`（オッズが約5%以上下がった）<br>④ レースの2m時点総投票額が **0.4億円以上**（当日データのスケール。上記 IMPORTANT 参照） |
+| 1レースの点数 | 条件を満たす馬が複数いる場合は**期待値が最も高い1頭のみ**。複数レースが条件を満たせば各レースで1頭ずつ買う |
+| 賭け金 | **Flat ベット（1点100円）**。Kelly は使わない |
+| 実際の上限 | `.env` の `BUYING_MAX_*` を超える買い目を含むレースは、**減額せずにレースごと見送る** |
 
-- レース選別のしきい値は再学習時に学習期間の分布から決めて保存し、当日の値では決め直しません（未来の情報を使わないため）。
+購入条件は `config/config.yaml` の `strategy` セクションで変更できます（既定値は
+`src/simulator/strategy.py`）。モデルの再学習とは独立に変えられます。
+
+- 確率は isotonic で校正済みで、予測値をそのまま勝率として読めます（実測で予測0.08%の馬は実際に0.07%、予測32.3%の馬は31.9%勝ちました）。`EV = 確率 × オッズ` はこの校正を前提にしており、校正器が無いと予測は停止します。
 - 特徴量の定義を変えると、保存済みモデルとの不一致を検出して予測を停止します。その場合は再学習してください。
+- 全馬の予測 CSV には、各馬が**どのフィルタで外れたか**が `skip_reason` 列に残ります（複数該当時は `pool_below_min|ev_below_threshold` のように連結）。
+
+### 7.1 レポートの検証構成との差分
+
+| 項目 | レポートの検証 | 本実装 |
+| --- | --- | --- |
+| 判断時点 | 1分前 | **2分前** |
+| EV しきい値 | 1.20 | **1.05** |
+| 1レースの点数 | 最大3点 | **1点** |
+| 賭け金 | fractional Kelly（係数0.10） | **Flat 100円** |
+| 総投票額フィルタ | 無し（§5 の知見として提示のみ） | **5億円以上** |
+| 特徴量 | 29列 | **22列**（データが無い/当日取れない7列を除外） |
+
+レポートの回収率 136.98%（95%CI [109.3, 161.4]）は左列の構成の数字です。
+**本実装の構成での成績は検証されていません。**
 
 ---
 
@@ -296,7 +347,7 @@ KeibaAI_Main/
 
 - **モード**: `paper` → `dry-run` → `live` の順に確認してください。live は `BUYING_MODE=live` と `--live` の両方が必要です。
 - **kill switch**: `BUYING_KILL_SWITCH=true` の間は購入せず、判定と記録だけ行います（初期値 true）。
-- **安全審査（RiskGate）**: 送信期限（発走2分前）より前であること、金額・点数が上限以内であること、5分前オッズの証跡（`snapshot_label=5m`、基準時刻が発走5分前、状態 `saved`、鮮度180秒以内）を確認し、1つでも満たさないレースは購入しません。上限を超えた場合も減額はせず、レースごと見送ります。
+- **安全審査（RiskGate）**: 送信期限（発走90秒前）より前であること、金額・点数が上限以内であること、2分前オッズの証跡（`snapshot_label=2m`、基準時刻が発走2分前、状態 `saved`、鮮度180秒以内）を確認し、1つでも満たさないレースは購入しません。上限を超えた場合も減額はせず、レースごと見送ります。
 - **確認画面の照合**: 即PAT の確認画面に表示された合計金額が購入指示と一致しない場合は送信しません。
 - **二重購入防止**: 購入台帳の一意キーで、同じレース・同じ買い目を二度送信しません。
 - **成立不明の扱い**: 送信後に結果が確認できない場合は「成立不明」として記録し、自動で再送しません（終了コード 2）。
@@ -307,7 +358,17 @@ KeibaAI_Main/
 ## 9. 制約・注意点
 
 - **再学習に当日の結果は自動では入りません。** 学習データ（`data/processed/odds_series`、`data/processed/horses`）を更新する処理は本リポジトリに無いため、17時前後の自動再学習は、その時点で置かれている学習データで学習し直します。当日分を学習に含めるには、学習データを更新してから `python main.py --retrain-only` を実行してください。学習データの最終日が当日より前の場合は、その旨がログに WARNING で出ます。
-- **5分前判断の成績は未検証**です（冒頭の注意を参照）。
+- **総投票額のスケールが学習と当日で違う（最重要）**: 学習データ（JV-Link 履歴 `0B41`）と当日データ（速報 `0B31`）で `hyosu_total` が **9〜13倍**違います（当日中央値0.40億円 / 履歴1m中央値5.73億円。**競馬場を揃えても倍率は変わらない**ので開催の質ではなくデータ区分の違いです）。オッズ自体は両方とも控除率21%前後で整合しており壊れていません。**総票数の絶対値だけ**がずれています。
+  - 現在の既定は当日スケールの **0.4億円**（日内上位50%相当）です。**根拠は1開催日22レースのみで信頼性は低く**、開催を重ねたら必ず測り直してください。
+  - 倍率は時点により一定でない（60m:8.3倍 / 1m:11.9倍）ため、**単純な定数倍での換算もできません**。
+  - **本筋の対処は当日取得を履歴と同じ `0B41` に揃えること**です。これにより §5 の検証知見（7億円で回収率200.7%など）をそのまま使えます。
+  - 購入が0点続く場合は、まず `strategy.min_pool_yen` を疑ってください（全レースが落ちた場合は ERROR ログで明示します）。
+  - 分位点モード（`strategy.min_pool_pctile`）も実装していますが、レース単位で判断する `main.py` の経路では「渡されたレースの中での順位」になり**フィルタが無効化される**ため既定では無効です。日次バッチで全レースまとめて判定する場合にのみ使えます。
+- **学習は1分前・当日判断は2分前というずれ**: 過去データ `data/processed/odds_series` に 2m 列が無く、`3m` 列は全月・全行で `5m` と完全に同一（JV-Link 履歴が実質 5m → 1m しか返していない）ため、2m で学習する手段がありません。よってモデルは 1m で学習し、当日は 2m で判断します。区間が4分と3分で違うため、2m のドリフトは 1m よりやや小さく出ます（採用が保守的になる側のずれ）。実行時に WARNING で明示されます。
+- **学習期間は2023年1月以降に限る**: `1m` が実質的に更新されるのは2023年以降です（2016〜2021年は98%のレースで `5m` と `1m` の総票数が同一）。それより前を混ぜると「年代の代理変数」になるため、既定の開始年月は `202301` で、それより前を指定すると WARNING が出ます。
+- **本実装の条件の組み合わせは未検証**です（§7.1 と冒頭の注意を参照）。
+- **高分散**: 的中率5%・平均40倍の戦略です。レポートでは122点の連続不的中と最大18.7万円のドローダウン（1点1,000円時）が観測され、最初の9ヶ月はマイナス圏でした。
+- **当日取得できない特徴量は使っていません**: 馬体重・斤量・性齢はこのリポジトリの当日データ（出馬表 CSV）に無く、出馬表パーサも存在しないため、特徴量から外しています。距離・馬場は学習データにもありません。出馬表から取得できるようになれば `FEATURE_COLS` に戻して再学習する価値があります。
 - **PC の時計**: 取得・購入の判定は PC の時刻（日本時間）で行います。Windows の時刻同期を有効にしてください。
 - **実行中に CSV を Excel で開かない**: Excel が開いたファイルは書き込めなくなり、取得に失敗します。
 - **起動の遅れ**: 起動時点で過ぎた取得時点は既定でスキップします（`skipped_at_startup` として記録）。`--include-past` で復元できますが、時系列オッズは5〜10分程度の粒度なので、5分前の厳密な値にはなりません。
@@ -322,7 +383,7 @@ KeibaAI_Main/
 | --- | --- |
 | `起動できませんでした: 認証情報が未設定です` | `src/buying/.env` の作成。購入しない場合は `--no-buy` か `--paper` |
 | `BUYING_MODE=live の実購入には --live の指定が必要です` | 意図した live なら `--live` を付ける |
-| `モデルが使えないため…` | `data/model/simulator/` のモデル3ファイル。特徴量が変わった場合は `--retrain-only` で作り直す |
+| `モデルが使えないため…` | `data/model/win/` のモデル3ファイル。特徴量が変わった場合は `--retrain-only` で作り直す |
 | `本日の開催が無いか、出馬表を取得できませんでした` | 開催日か、JRA サイトに接続できるか。`--headed` で画面を確認 |
 | 予測が `10m と 5m のオッズが1行も対応しませんでした` | `realtime_odds/YYYYMMDD/YYYYMMDD_scheduler_events.csv` の該当レースの `status`（`jvlink_unavailable` なら JV-Link の状態） |
 | 購入されない | `data/processed/buying/logs/YYYYMMDD_buying.jsonl` の `race_rejected` の `reasons`（`kill_switch`、`submit_deadline_expired`、`odds_stale`、`max_*` 等） |

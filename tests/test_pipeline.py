@@ -24,13 +24,13 @@ def _event(race_id: str, label: str, status: str = "saved") -> dict:
 
 
 class DecisionRaceIdsTest(unittest.TestCase):
-    def test_only_saved_5m_events_trigger_decisions(self) -> None:
+    def test_only_saved_2m_events_trigger_decisions(self) -> None:
         events = [
             _event("R1", "10m"),
-            _event("R2", "5m"),
-            _event("R3", "5m", "saved_stale"),
-            _event("R4", "5m", "no_odds_before_target"),
-            _event("R2", "5m"),
+            _event("R2", "2m"),
+            _event("R3", "2m", "saved_stale"),
+            _event("R4", "2m", "no_odds_before_target"),
+            _event("R2", "2m"),
         ]
 
         self.assertEqual(decision_race_ids(events), ["R2", "R3"])
@@ -62,7 +62,7 @@ class RaceDecisionWorkerTest(unittest.TestCase):
     def test_records_errors_and_keeps_running(self) -> None:
         def decide(race_ids: list[str]) -> dict:
             if race_ids == ["BAD"]:
-                raise ValueError("5m が無い")
+                raise ValueError("2m が無い")
             return {"race_ids": race_ids}
 
         recorded: list[dict] = []
@@ -75,7 +75,7 @@ class RaceDecisionWorkerTest(unittest.TestCase):
         worker2.submit(["OK"])
         worker2.stop()
 
-        self.assertIn("5m が無い", recorded[0]["error"])
+        self.assertIn("2m が無い", recorded[0]["error"])
         self.assertEqual(recorded[1], {"race_ids": ["OK"]})
 
 
@@ -133,8 +133,8 @@ class SaveOutputsMergeTest(unittest.TestCase):
     def _work(race_id: str, bet: bool) -> pd.DataFrame:
         return pd.DataFrame([{
             "race_id": race_id, "horse_number": 1, "pred_proba": 0.2,
-            "odds_5m": 8.0, "ev": 1.6, "bet_amount": 300.0 if bet else 0.0,
-            "pool_5m": 1e7, "inc_share_10m_5m": 0.1,
+            "odds_used": 8.0, "ev": 1.6,
+            "pool_late_yen": 1e7, "drift_5_late": -0.2, "inc_share_5_late": 0.1,
             "skip_reason": "" if bet else "ev_below_threshold",
         }])
 

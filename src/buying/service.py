@@ -89,10 +89,21 @@ class PurchaseService:
             if self.settings.mode != BuyingMode.PAPER and not self.settings.kill_switch and grouped:
                 if self.settings.credentials is None:
                     raise ValueError("ブラウザ実行に必要な認証情報がありません")
-                browser = self.browser_factory()
-                browser.login(self.settings.credentials)
-                balance = browser.get_balance_yen()
+                try:
+                    browser = self.browser_factory()
+                    browser.login(self.settings.credentials)
+                    balance = browser.get_balance_yen()
+                except Exception as exc:
+                    # ログイン前なので送信済みの購入はない。例外を上へ投げず、
+                    # 全レース見送りとして記録し、予測結果を残せるようにする。
+                    report.rejected += len(strategy.intents)
+                    report.errors.append(f"login: {exc}")
+                    self.audit.write("login_failed", run_id=report.run_id, error=str(exc))
+                    return report
                 self.audit.write("browser_logged_in", run_id=report.run_id, balance_yen=balance)
+                if balance is None:
+                    # 残高上限の審査は行われない。1日上限・レース上限・台帳は有効。
+                    self.audit.write("balance_unavailable", run_id=report.run_id)
 
             for race_id, raw_intents in sorted(grouped.items()):
                 intents = tuple(raw_intents)

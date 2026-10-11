@@ -11,9 +11,9 @@ data:
   output_dir: output
 
 model:
-  # 学習済みモデルの保存先（data/model/simulator/win_pool_filter.txt 等）
+  # 学習済みモデルの保存先（data/model/win/win_anaba.txt 等）
   model_dir: data/model
-  # 木の形は src/simulator/retrain.py の SPEC_LGBM_PARAMS で上書きされる。
+  # 木の形は src/simulator/retrain.py の ANABA_LGBM_PARAMS で上書きされる。
   # ここでは木の本数の上限と early stopping だけを指定する。
   lightgbm:
     n_estimators: 1000
@@ -29,19 +29,39 @@ model:
     w_recent: 3.0
     w_mid: 2.0
 
-# 賭け金の計算（docs/report/pool_filter_condition_spec.md §6）
-evaluation:
-  initial_bankroll: 5000     # Kelly の基準資金（円）
-  use_kelly_criterion: true
-  kelly_fraction: 0.1          # fractional Kelly
-  max_bet: 500                # 1点あたりの上限（円）。実際の購入上限は .env の BUYING_MAX_* も効く
-  min_proba_win: 0.0
-  max_bets_per_race_win: 2
+# 穴馬戦略の購入条件（docs/report/anaba_strategy_report/anaba_strategy_report.md）
+# 既定値は src/simulator/strategy.py が持つ。ここに書けば上書きできる。
+strategy:
+  min_ev: 1.05               # EV = 予測確率 × 2mオッズ の下限
+  odds_min: 10.0             # 2mオッズの下限（これ未満は妙味が小さい）
+  odds_max: 150.0            # 2mオッズの上限（これ超は期待値が崩れる）
+  max_drift: -0.05           # log(2mオッズ / 5mオッズ) の上限。負=オッズが下がった
+  # 総投票額フィルタ。min_pool_pctile を設定するとそちらが優先される。
+  #
+  # IMPORTANT: 当日データ（JV-Link 速報 0B31）は学習データ（履歴 0B41）より
+  #   総票数が 9〜13倍小さい（競馬場を揃えても同じ）。よって履歴で検証した
+  #   5億円という絶対額を当日データに当てると1レースも通らない。
+  #   詳細は docs/report/pool_by_race_number_report.md §6。
+  #
+  #   下の 40000000（0.4億円）は、当日データで「その日の上位50%」に
+  #   相当する水準である。**ただし当日データは1開催日22レースしか無く、
+  #   この値の信頼性は低い。** 開催を重ねてデータが溜まったら測り直すこと。
+  #   本来の解決は当日取得を履歴と同じ 0B41 に揃えることである（§6.1 案A）。
+  min_pool_yen: 40000000     # 当日(0B31)スケールでの下限（0.4億円 ≒ 日内上位50%）
+  #
+  # min_pool_pctile: 日内分位点で判定する（絶対額より優先）。
+  #   スケール差に影響されない利点があるが、レース単位で判断する
+  #   src/pipeline/daily.py の経路では「渡されたレースの中での順位」に
+  #   なってしまい、1レースだけだとフィルタが無効化される（警告が出る）。
+  #   日次バッチで全レースまとめて判定する場合にのみ有効。
+  min_pool_pctile: null
+  max_bets_per_race: 1       # 1レースあたりの購入点数（期待値最大の1頭のみ）
+  stake_yen: 100             # Flat ベットの1点あたり金額（円）
 
 # main.py の日次実行
 pipeline:
-  model_filename: simulator/win_pool_filter.txt
-  retrain_start_period: '202401'   # 再学習に使う最初の年月（終わりは実行日の月）
+  model_filename: win/win_anaba.txt
+  retrain_start_period: '202301'   # 再学習に使う最初の年月（1m が使えるのは2023年以降）
   retrain_delay_minutes: 30        # 最終レース発走から再学習を始めるまでの分数
 
 # 単独実行（python -m src.simulator.*）時のログ

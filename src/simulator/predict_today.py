@@ -1,7 +1,7 @@
-"""当日のオッズ・投票数で予測しベット推奨を出す単独実行プログラム（spec §6）。
+"""当日のオッズ・投票数で予測しベット推奨を出す単独実行プログラム。
 
-レース当日、10m・5m時点のオッズと総票数を取得して特徴量化し、学習済みモデルで
-各馬の勝率を予測して、買うべき馬と賭け金を CSV に出力する。
+レース当日、発走2分前のオッズと総票数を取得して特徴量化し、学習済みモデルで
+各馬の勝率を予測して、買うべき馬を CSV に出力する。
 
     # 取得から予測まで一気通貫（当日これを実行する）
     python -m src.simulator.predict_today --fetch
@@ -12,45 +12,60 @@
     # 日付・EVしきい値を指定する
     python -m src.simulator.predict_today --date 2026-07-18 --min-ev 1.10
 
-処理の流れ（spec §1）::
+処理の流れ::
 
-    [1] 10m時点と5m時点のオッズ・総票数を取得（--fetch で当日スクレイパを起動）
-    [2] 馬番別の投票額を逆算（オッズの定義式から）
-    [3] 特徴量2列を作る: odds_5m / inc_share_10m_5m
-    [4] 学習済み LightGBM で各馬の勝率を予測
-    [5] 【フィルタ】5m時点のレース総額がしきい値未満のレースは丸ごと見送る
-    [6] 残ったレースで EV = 予測確率 × 5mオッズ >= min_ev の馬を買う
-    [7] 賭け金は fractional Kelly で決定、1レース最大 N 点
+    [1] 発走2分前に、各馬の 2m オッズと総票数を取得
+        （文脈として 60m/30m/10m/5m も読む）
+    [2] 22列の特徴量を作り、LightGBM で各馬の勝率を予測（isotonic で校正）
+    [3] 次の条件を全て満たす馬を買う
+          ・EV = 予測確率 × 2mオッズ >= 1.05
+          ・2mオッズが 10倍以上 150倍以下
+          ・log(2mオッズ / 5mオッズ) <= -0.05   ← オッズが約5%以上下がった
+          ・レースの2m時点総投票額が「その日の上位50%」
+            （絶対額5億円は当日データのスケールでは使えない。下記 NOTE 参照）
+    [4] 条件を満たす馬が複数いるレースでは期待値が最も高い1頭のみ
+    [5] 賭け金は Flat ベット（1点 100円）
 
 出力: ``output/simulator/{YYYYMMDD}_bets.csv``（推奨のみ）と
-``{YYYYMMDD}_all.csv``（全馬の予測。見送り理由つき）。
+``{YYYYMMDD}_all.csv``（全馬の予測。どのフィルタで外れたかつき）。
 
-IMPORTANT (しきい値は学習時の固定値を使う):
-    ``pool_5m`` のしきい値は再学習時に**学習期間の分布**から決めた値を
-    そのまま使う（spec §5.2）。当日のレース群から取り直すと「その日
-    たまたま厚かったレース」を基準にすることになり、未来を見ない前提が
-    崩れる。
+NOTE (総投票額フィルタは分位点で行う):
+    学習データ（JV-Link 履歴 0B41）と当日データ（速報 0B31）で
+    ``hyosu_total`` のスケールが 9〜13倍違うため、絶対額（5億円）を
+    当日データに当てると1レースも通らない。よって既定では
+    「その日・その開催の中での分位点」で判定する
+    （``config.yaml`` の ``strategy.min_pool_pctile``）。
+    履歴データでの検証では、日内上位30%で回収率202.6%、
+    絶対額7億円の200.7%とほぼ同等だった。
+    詳細は ``docs/report/pool_by_race_number_report.md`` §6。
 
-IMPORTANT (5m時点で判断する理由):
+IMPORTANT (2m 時点で判断する理由):
     実際の投票締切は発走の約1分前であり、1mオッズを見てから発注する時間的
-    余裕は無い（spec §8-5）。よって判断を 5m 時点に前倒ししている。
-    5m以降のオッズ（4m〜10s）は取得・保存するが予測には使わない。
+    余裕は無い。よって判断を 2m 時点に前倒ししている。
+    2m以降のオッズ（1m・10s）は取得・保存するが予測には使わない。
 
-IMPORTANT (本条件は実運用の推奨ではない):
-    単一分割・多重比較を含む調査結果であり、期間安定性は未検証。
-    的中率3.85%・平均オッズ80倍の高分散戦略である（spec §7・§8）。
+IMPORTANT (学習は 1m / 当日判断は 2m):
+    過去データに 2m スナップショットが存在しないため、モデルは 1m 時点で
+    学習している。:mod:`src.simulator.features` の冒頭に記録した既知の
+    制約であり、起動時にも警告が出る。
+
+IMPORTANT (本条件の回収率は未検証の組み合わせである):
+    レポートの検証値（回収率136.98% / 95%CI [109.3, 161.4]）は
+    EV>=1.20・1レース最大3点・1m判断・fractional Kelly の構成である。
+    本実装は EV>=1.05・1レース1点・2m判断・Flat100円に総投票額フィルタを
+    加えた構成で、**この組み合わせ自体は検証されていない**。
+    的中率5%・平均40倍の高分散戦略であることも併せて認識して運用すること。
 """
 import argparse
 import datetime as dt
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Iterable, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
-from src.models.evaluation import ModelEvaluator
 from src.models.model_creator import ModelCreator
 from src.simulator.artifacts import (
     DEFAULT_MODEL_FILENAME,
@@ -60,16 +75,23 @@ from src.simulator.artifacts import (
     resolve_model_path,
 )
 from src.simulator.features import (
-    INC_SHARE_COL,
-    ODDS_COL,
+    DRIFT_COL,
+    LIVE_DECISION_SNAPSHOT,
     POOL_COL,
-    attach_features,
+    build_features,
     drop_incomplete_rows,
     feature_frame,
+    normalize_late_columns,
 )
 from src.simulator.realtime_loader import (
     DEFAULT_REALTIME_DIR,
     load_today_snapshots,
+)
+from src.simulator.strategy import (
+    REASON_BET,
+    AnabaRule,
+    apply_rule,
+    rule_from_config,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,39 +101,18 @@ BET_TYPE = 'win'
 # 推奨 CSV の出力先（``output`` 配下）
 OUTPUT_SUBDIR = 'simulator'
 
-# 見送り理由のラベル（全馬 CSV の ``skip_reason`` に入る）
-REASON_BET = ''
-REASON_POOL = 'pool_filter'          # レース総額がしきい値未満
-REASON_EV = 'ev_below_threshold'     # EV がしきい値未満
-REASON_PROBA = 'proba_below_min'     # 予測確率が下限未満
-REASON_MAX_BETS = 'max_bets_per_race'  # 1レース点数上限で次点に漏れた
-REASON_KELLY = 'kelly_zero'          # Kelly が 0 円（賭けない）
-# 理由が複数あるときの区切り（例: ``pool_filter|ev_below_threshold``）
-REASON_SEP = '|'
-
-
-def _join_reasons(
-    flags: Dict[str, pd.Series], index: pd.Index
-) -> pd.Series:
-    """立っている見送り理由を ``flags`` の順に連結する。
-
-    Args:
-        flags: 理由ラベル -> その理由で見送るかの bool Series
-        index: 戻り値の index
-
-    Returns:
-        pd.Series: ``REASON_SEP`` 区切りの理由（購入する馬は ``REASON_BET``）
-    """
-    joined = pd.Series(REASON_BET, index=index, dtype='object')
-    for label, failed in flags.items():
-        hit = failed.reindex(index, fill_value=False).fillna(False).to_numpy()
-        if not hit.any():
-            continue
-        prefix = joined[hit]
-        joined[hit] = np.where(
-            prefix == REASON_BET, label, prefix + REASON_SEP + label
-        )
-    return joined
+# 全馬 CSV に出す列（根拠が後から追えるようにする）
+OUTPUT_COLS: Tuple[str, ...] = (
+    'race_id', 'horse_number',
+    'pred_proba', 'odds_used', 'ev',
+    # 根拠となる市場の値
+    'odds_5m_raw', DRIFT_COL, 'inc_share_5_late', POOL_COL,
+    'mkt_rank_late', 'field_size',
+    # どの時点を判断に使ったか（2m が欠けて代用した場合に効く）
+    'decision_snapshot_used',
+    # 見送り理由
+    'skip_reason',
+)
 
 
 @dataclass
@@ -125,8 +126,9 @@ class PredictionSummary:
     n_bets: int
     total_bet: float
     mean_odds: float
-    pool_threshold: float
+    rule_summary: str
     min_ev: float
+    pool_filter_summary: str
     bets_path: str
     all_path: str
 
@@ -152,10 +154,7 @@ def fetch_today_odds(
         RuntimeError: 当日の発走時刻を取得できなかった場合
     """
     # JV-Link / ブラウザに依存するため、--fetch 指定時のみ import する
-    from src.scraping.realtime_odds import (
-        get_today_schedule,
-        run_scheduler,
-    )
+    from src.scraping.realtime_odds import get_today_schedule, run_scheduler
 
     logger.warning('当日オッズの取得を開始します: %s', target_date)
     schedule = get_today_schedule(target_date, headless=headless)
@@ -173,7 +172,7 @@ def predict_proba(
         model_filename: ``data/model`` 配下のモデルファイル名
 
     Returns:
-        Tuple[np.ndarray, SimulatorParams]: (予測確率, 運用パラメータ)
+        Tuple[np.ndarray, SimulatorParams]: (校正済み予測確率, 運用パラメータ)
     """
     creator = ModelCreator(config, config.get('features_def'))
     model_path = resolve_model_path(creator.model_dir, model_filename)
@@ -183,92 +182,6 @@ def predict_proba(
     creator.load_model(model_filename, model_name=BET_TYPE)
     proba = creator.predict(feature_frame(df), model_name=BET_TYPE)
     return proba, params
-
-
-def select_bets(
-    config: dict,
-    df: pd.DataFrame,
-    proba: np.ndarray,
-    params: SimulatorParams,
-    *,
-    min_ev: Optional[float] = None,
-) -> pd.DataFrame:
-    """フィルタ・EV・Kelly を適用して全馬に賭け判断を付ける（spec §6）。
-
-    賭けない馬も落とさず ``skip_reason`` を付けて返す。当日の意思決定では
-    「なぜ買わなかったか」が確認できる必要があるため。
-
-    賭け金は ``ModelEvaluator._kelly_criterion_vec`` をそのまま使う。
-    バックテストと同じ関数を通すことで、検証時と当日で賭け金の定義が
-    ずれることを防ぐ。
-
-    Args:
-        config: 全体設定辞書
-        df: 特徴量・``pool_5m``・``odds_5m`` を持つ DataFrame
-        proba: 予測確率（df と同じ行順）
-        params: 運用パラメータ（しきい値・既定 EV）
-        min_ev: EV しきい値（省略時は ``params.min_ev``）
-
-    Returns:
-        pd.DataFrame: 全馬に ``pred_proba`` / ``ev`` / ``bet_amount`` /
-            ``skip_reason`` を付けた表（確率降順）
-    """
-    evaluator = ModelEvaluator(config.get('evaluation', {}))
-    threshold_ev = float(min_ev if min_ev is not None else params.min_ev)
-    min_proba = evaluator.min_proba_win
-    max_bets = evaluator.max_bets_per_race_win
-
-    work = df.copy().reset_index(drop=True)
-    work['pred_proba'] = np.asarray(proba, dtype='float64')
-    # 賭け判断オッズは 5m 時点（spec §6「賭け値と特徴量の時点が揃っている」）
-    work['odds_used'] = work[ODDS_COL].astype('float64')
-    work['ev'] = work['pred_proba'] * work['odds_used']
-
-    # [5] レース単位のフィルタ。通らないレースは丸ごと見送る。
-    passed_pool = work[POOL_COL] >= params.pool_threshold
-    # [6] 期待値・最低確率
-    passed_ev = work['ev'] >= threshold_ev
-    passed_proba = work['pred_proba'] >= min_proba
-
-    # 理由は上書きせず全て連結する（pool と EV の両方で落ちたことを残す）
-    work['skip_reason'] = _join_reasons(
-        {
-            REASON_POOL: ~passed_pool,
-            REASON_EV: ~passed_ev,
-            REASON_PROBA: ~passed_proba,
-        },
-        work.index,
-    )
-
-    # [7] 1レース最大点数。確率の高い順に残す（extract_bet_rows と同じ基準）。
-    candidate = work['skip_reason'] == REASON_BET
-    if max_bets > 0 and candidate.any():
-        kept = (
-            work[candidate]
-            .sort_values('pred_proba', ascending=False)
-            .groupby('race_id', group_keys=False)
-            .head(max_bets)
-            .index
-        )
-        dropped = work.index[candidate].difference(kept)
-        work.loc[dropped, 'skip_reason'] = REASON_MAX_BETS
-
-    # [7] 賭け金は fractional Kelly（バックテストと同じ関数を使う）
-    work['bet_amount'] = 0.0
-    betting = work['skip_reason'] == REASON_BET
-    if betting.any():
-        work.loc[betting, 'bet_amount'] = evaluator._kelly_criterion_vec(
-            work.loc[betting, 'pred_proba'].to_numpy(dtype='float64'),
-            work.loc[betting, 'odds_used'].to_numpy(dtype='float64'),
-            evaluator.initial_bankroll,
-        )
-        # Kelly が 0 円になった馬（オッズ対比で妙味が消えた）は買わない
-        zero = betting & (work['bet_amount'] <= 0.0)
-        work.loc[zero, 'skip_reason'] = REASON_KELLY
-
-    return work.sort_values(
-        ['race_id', 'pred_proba'], ascending=[True, False]
-    ).reset_index(drop=True)
 
 
 def _write_csv(
@@ -289,8 +202,9 @@ def _write_csv(
         existing = pd.read_csv(path, encoding='utf-8-sig', dtype={'race_id': str})
         existing = existing[~existing['race_id'].isin(race_ids)]
         frame = pd.concat([existing, frame], ignore_index=True, sort=False)
+    if 'ev' in frame.columns:
         frame = frame.sort_values(
-            ['race_id', 'pred_proba'], ascending=[True, False], kind='stable'
+            ['race_id', 'ev'], ascending=[True, False], kind='stable'
         )
     frame.to_csv(path, index=False, encoding='utf-8-sig')
     return frame
@@ -305,8 +219,11 @@ def save_outputs(
 ) -> Tuple[Path, Path]:
     """推奨 CSV と全馬 CSV を書き出す。
 
+    全馬 CSV は「どのフィルタで外れたか」を ``skip_reason`` に残す。
+    当日の意思決定では「なぜ買わなかったか」を後から確認できる必要がある。
+
     Args:
-        work: :func:`select_bets` の戻り値
+        work: :func:`src.simulator.strategy.apply_rule` の戻り値
         target_date: 対象日
         output_dir: 出力先ディレクトリ
         merge_existing: True なら既存の当日 CSV のうち今回予測していない
@@ -319,10 +236,7 @@ def save_outputs(
     stamp = f'{target_date:%Y%m%d}'
     race_ids = set(work['race_id'].astype(str))
 
-    cols = [
-        'race_id', 'horse_number', 'pred_proba', ODDS_COL, 'ev',
-        'bet_amount', POOL_COL, INC_SHARE_COL, 'skip_reason',
-    ]
+    cols = [c for c in OUTPUT_COLS if c in work.columns]
     all_path = output_dir / f'{stamp}_all.csv'
     written_all = _write_csv(
         work[cols], all_path, race_ids, merge_existing=merge_existing
@@ -332,7 +246,7 @@ def save_outputs(
     bets_path = output_dir / f'{stamp}_bets.csv'
     # 今回のレースに推奨が無い場合も、同レースの古い推奨行は置き換えて消す
     _write_csv(
-        bets[cols].drop(columns='skip_reason'), bets_path, race_ids,
+        bets[[c for c in cols if c != 'skip_reason']], bets_path, race_ids,
         merge_existing=merge_existing,
     )
     logger.warning('推奨を保存: %s（今回 %s 点）', bets_path, f'{len(bets):,}')
@@ -362,12 +276,11 @@ def run_predict_today(
         target_date: 対象日（省略時は当日）
         realtime_dir: 当日オッズ CSV のディレクトリ
         model_filename: ``data/model`` 配下のモデルファイル名
-        min_ev: EV しきい値（省略時はモデルの運用パラメータ）
+        min_ev: EV しきい値（省略時は ``config`` / 既定値）
         fetch: True なら当日スクレイパを起動してから予測する
         headless: 出馬表取得用ブラウザを非表示にするか
         output_dir: 出力先（省略時は ``config`` の ``output_dir/simulator``）
         race_ids: 指定したレースだけを予測し、当日 CSV へ追記する
-            （省略時は取得済みの全レースを予測して上書きする）
 
     Returns:
         Tuple[PredictionSummary, pd.DataFrame]: (サマリ, 全馬の予測)
@@ -402,30 +315,43 @@ def predict_from_snapshots(
     output_dir: Optional[Path] = None,
     merge_existing: bool = False,
 ) -> Tuple[PredictionSummary, pd.DataFrame]:
-    """読込済みの 10m / 5m ワイド表から予測し、推奨 CSV を出力する。
+    """読込済みのワイド表から予測し、推奨 CSV を出力する。
 
     Args:
         config: 全体設定辞書
         raw: :func:`src.simulator.realtime_loader.load_today_snapshots` の戻り値
         target_date: 対象日
         model_filename: ``data/model`` 配下のモデルファイル名
-        min_ev: EV しきい値（省略時はモデルの運用パラメータ）
+        min_ev: EV しきい値（省略時は ``config`` / 既定値）
         output_dir: 出力先（省略時は ``config`` の ``output_dir/simulator``）
         merge_existing: True なら当日 CSV の他レースの行を残して追記する
 
     Returns:
         Tuple[PredictionSummary, pd.DataFrame]: (サマリ, 全馬の予測)
     """
-    # [2][3] 特徴量
-    work = attach_features(raw)
+    # [2] 特徴量。当日の「締切直前」は 2m。
+    work = normalize_late_columns(raw, LIVE_DECISION_SNAPSHOT)
+    work = build_features(work)
     n_races_total = int(work['race_id'].nunique())
     work = drop_incomplete_rows(work, context='当日予測')
 
-    # [4] 予測
-    proba, params = predict_proba(config, work, model_filename)
+    # [3] 予測（isotonic 校正済み）
+    proba, _params = predict_proba(config, work, model_filename)
 
-    # [5][6][7] フィルタ・EV・Kelly
-    work = select_bets(config, work, proba, params, min_ev=min_ev)
+    # [4][5] 購入条件の適用と Flat ベット
+    rule, _cfg = rule_from_config(config)
+    if min_ev is not None:
+        rule = AnabaRule(
+            min_ev=float(min_ev),
+            odds_min=rule.odds_min,
+            odds_max=rule.odds_max,
+            max_drift=rule.max_drift,
+            min_pool_yen=rule.min_pool_yen,
+            min_pool_pctile=rule.min_pool_pctile,
+            max_bets_per_race=rule.max_bets_per_race,
+            stake_yen=rule.stake_yen,
+        )
+    work = apply_rule(work, proba, rule)
 
     if output_dir is None:
         output_dir = Path(
@@ -436,17 +362,26 @@ def predict_from_snapshots(
     )
 
     bets = work[work['skip_reason'] == REASON_BET]
-    passed = work[work[POOL_COL] >= params.pool_threshold]
+    # 総投票額フィルタを通ったレース数（絶対額か分位点か、実際に使った方で数える）
+    if rule.min_pool_pctile is not None:
+        passed = work[work['pool_pctile'] >= rule.min_pool_pctile]
+    else:
+        passed = work[work[POOL_COL] >= rule.min_pool_yen]
     summary = PredictionSummary(
         target_date=str(target_date),
         n_races_total=n_races_total,
         n_races_passed=int(passed['race_id'].nunique()) if len(passed) else 0,
         n_horses=len(work),
         n_bets=len(bets),
-        total_bet=float(bets['bet_amount'].sum()),
+        total_bet=float(len(bets) * rule.stake_yen),
         mean_odds=float(bets['odds_used'].mean()) if len(bets) else float('nan'),
-        pool_threshold=params.pool_threshold,
-        min_ev=float(min_ev if min_ev is not None else params.min_ev),
+        rule_summary=rule.describe(),
+        min_ev=rule.min_ev,
+        pool_filter_summary=(
+            f'日内上位 {(1 - rule.min_pool_pctile) * 100:.0f}%'
+            if rule.min_pool_pctile is not None
+            else f'{rule.min_pool_yen / 1e8:.1f}億円 以上'
+        ),
         bets_path=str(bets_path),
         all_path=str(all_path),
     )
@@ -482,7 +417,7 @@ def _parse_args() -> argparse.Namespace:
         argparse.Namespace: 解析済み引数
     """
     parser = argparse.ArgumentParser(
-        description='当日のオッズ・投票数で予測しベット推奨を出す（spec §6）'
+        description='当日のオッズ・投票数で予測しベット推奨を出す'
     )
     parser.add_argument('--config', type=str, default='config/config.yaml',
                         help='設定ファイルパス')
@@ -499,7 +434,7 @@ def _parse_args() -> argparse.Namespace:
                         default=DEFAULT_MODEL_FILENAME,
                         help='data/model 配下のモデルファイル名')
     parser.add_argument('--min-ev', type=float, default=None,
-                        help='EV しきい値（省略時はモデルの運用パラメータ）')
+                        help='EV しきい値（省略時は config / 既定 1.05）')
     parser.add_argument('--output-dir', type=str, default=None,
                         help='出力先（省略時は output/simulator）')
     return parser.parse_args()
@@ -529,17 +464,18 @@ def main() -> None:
     bets = work[work['skip_reason'] == REASON_BET]
     print()
     print(f'=== 当日予測: {summary.target_date} ===')
+    print(f'  購入条件    : {summary.rule_summary}')
     print(f'  レース      : {summary.n_races_passed} / {summary.n_races_total}'
-          f' がフィルタ通過（{POOL_COL} >= {summary.pool_threshold:,.0f}円）')
-    print(f'  賭け条件    : EV >= {summary.min_ev:.2f}')
+          f' が総投票額 {summary.pool_filter_summary}')
     print(f'  推奨点数    : {summary.n_bets} 点 / 合計 {summary.total_bet:,.0f} 円')
     if summary.n_bets:
         print(f'  平均オッズ  : {summary.mean_odds:.1f} 倍')
         print()
-        show = ['race_id', 'horse_number', 'pred_proba', ODDS_COL, 'ev', 'bet_amount']
+        show = ['race_id', 'horse_number', 'pred_proba', 'odds_used',
+                DRIFT_COL, 'ev']
         print(bets[show].to_string(index=False, float_format=lambda v: f'{v:.4f}'))
     else:
-        print('  → 本日の推奨はありません（フィルタ・EV を通る馬がいませんでした）')
+        print('  → 本日の推奨はありません（条件を通る馬がいませんでした）')
     print()
     print(f'  推奨CSV     : {summary.bets_path}')
     print(f'  全馬CSV     : {summary.all_path}')

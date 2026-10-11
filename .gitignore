@@ -1,68 +1,37 @@
-# Virtual Environment
-.venv/
-venv/
-ENV/
-env/
-
-# Python Cache
+# --- Python build / cache ---
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-*.so
-*.egg
-*.egg-info/
-dist/
-build/
 
-# IDEs and Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-*.sublime-workspace
-*.sublime-project
-
-# Environment Variables and Secrets
-.env
-.env.local
-.env.*.local
-src/buying/.env
-src/**/.env
-*.pem
-*.key
-credentials.json
-
-# Database Files
-*.sqlite3
-*.db
-*.sqlite
-*.sqlite-journal
-
-# Screenshots and Media
-screenshots/
-*.png
-*.jpg
-*.jpeg
-*.gif
-
-# Temporary Files
-*.tmp
-*.bak
-.temp/
-tmp/
-
-# IDE-specific
+# pytest cache
 .pytest_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Virtual environment
+.venv/
+
+# SQLite DB
+*.sqlite3
+
+# Logs / traces / screenshots
+logs/
+traces/
+screenshots/
+
+# Environment files
+.env
+src/buying/.env
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+
+# MyPy / coverage / profiling
+.mypy_cache/
 .coverage
 htmlcov/
-.mypy_cache/
-.hypothesis/
-
-# OS-specific
-Thumbs.db
-.DS_Store
-*.lnk
+# 即PAT画面ダンプ（マスク済みだが画面構造を含むため除外）
+data/processed/buying/diagnostics/
