@@ -1,0 +1,24 @@
+## button (0件)
+## a (12件)
+  [0] class='blank' text='INET-ID とは'
+  [1] title='ログイン'
+  [2] text='こちら'
+  [3] text='スマートフォン版投票サイトはこちら'
+  [4] text='こちら'
+  [5] text='馬券は20歳になってから'
+  [6] text='JRAのギャンブル等依存症対策'
+  [7] class='blank' text='JRAホームページ'
+  [8] class='blank'
+  [9] class='blank'
+  [10] class='blank'
+  [11] class='blank'
+## input (6件)
+  [0] name='inetid' type='text'
+  [1] name='uh' type='HIDDEN' text='092JfJ'
+  [2] name='g' type='HIDDEN' text='010'
+  [3] name='u' type='HIDDEN' text='000000000012'
+  [4] name='spatflg' type='HIDDEN' text='0'
+  [5] name='saveCookie' type='checkbox' class='s-010chk'
+## [role=button] (0件)
+## [onclick] (1件)
+  [0] title='ログイン'

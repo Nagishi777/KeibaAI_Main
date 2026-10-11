@@ -1,0 +1,221 @@
+<!-- url: https://www.ipat.jra.go.jp/pw_080_i.cgi -->
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"><html lang="ja"><!-- Lastupdate 2025/03/17 12:02 --><head>
+<meta http-equiv="X-UA-Compatible" content="IE=7">
+<meta charset="utf-8">
+<meta http-equiv="Content-Style-Type" content="text/css">
+<link rel="apple-touch-icon-precomposed" href="/tmpl/images/ipat_icon.png">
+<script language="JavaScript" type="text/javascript" src="tmpl/000_231208.js"></script>
+<script language="JavaScript" type="text/javascript" src="tmpl/080_241129.js"></script>
+<script language="JavaScript">
+<!--
+var g080_nExpDate = 365;
+var g080_cExpDate_min = "Wed, 1-Jan-1902 00:00:00 GMT";
+var g080_cUserId = "";
+var g080_cPars = "";
+var g080_cFrameURL = "https://"+location.hostname+"/2017/pw_890_i.cgi";
+var g080_nIntlLoginFlag = 0;
+var g080_cAuthReqId = "";
+var g080_cFrameReqId = "";
+var g080_cContractReqId = "";
+
+var msg2 = "通信異常が発生しました。\nお客様の端末の通信環境をご確認の上、再度操作してください。";
+var msg3 = "通信に失敗しました。\nもう一度やり直してください。";
+
+if(g080_nIntlLoginFlag == 0){
+	g080_cAuthReqId = "1001";
+	g080_cFrameReqId = "1002";
+	g080_cContractReqId = "1005";
+}else{
+	g080_cAuthReqId = "1201";
+	g080_cFrameReqId = "1202";
+	g080_cContractReqId = "1205";
+}
+
+if(document.cookie){
+	g080_cUserId = GetCookie("userid");
+	g080_cPars = GetCookie("pars");
+	if((g080_cUserId != "") && (g080_cPars != "")){
+		g080_cUserId = DProc(g080_cUserId);
+		g080_cPars = DProc(g080_cPars);
+	}
+}
+
+document.open();
+WriteCSS();
+document.close();
+// -->
+</script><link rel="stylesheet" type="text/css" href="/tmpl/ipat_k3_231208.css">
+<title>JRA　ネット投票</title>
+</head>
+<body onload="fOnLoad()" id="top" class="header_modern">
+<div id="ipat-navbar">
+	<div class="container relative">
+		<div class="brand pull-left">
+			<img alt="JRAネット投票" src="tmpl/images/logo_modern.gif" width="123" height="33">
+		</div>
+	</div>
+</div>
+<div id="ipat-navbarIntl" class="ipatNavbarIntl displayNone">
+	<div class="container relative">
+		<div class="brand pull-left">
+			<img alt="海外競馬ネット投票" src="tmpl/images/logo_modern_intl.gif" width="204.5" height="33">
+		</div>
+	</div>
+</div>
+<div id="noscript" style="color: red; display: none;">
+	JRA ネット投票ではJavaScriptを使用しています。<br>JavaScriptに対応したブラウザをご利用いただくか、JavaScriptを使用するように設定してからご利用願います。
+</div>
+<script type="text/javascript">
+	document.getElementById('noscript').style.display="none";
+</script>
+<form name="FORM5" action="" method="POST">
+	<input type="HIDDEN" name="reqid" style="">
+	<input type="HIDDEN" name="inetid" style="">
+	<input type="HIDDEN" name="uh" style="">
+	<input type="HIDDEN" name="u" style="">
+	<input type="HIDDEN" name="nm" style="">
+	<input type="HIDDEN" name="mzj" style="">
+	<input type="HIDDEN" name="fidf" style="">
+	<input type="hidden" name="mli" style="">
+	<input type="hidden" name="ckn" style="">
+</form>
+<form name="FORM6" action="" method="POST">
+	<input type="HIDDEN" name="uh" value="***MASKED***" style=""><input type="HIDDEN" name="inetid" value="***MASKED***" style=""><input type="HIDDEN" name="g" value="***MASKED***" style="">
+</form>
+<div class="bg-block bg-block_modern" id="main_area">
+<div class="bg-block2 s-080">
+<h2>加入者情報 入力</h2>
+<div class="form">
+<h3>加入者情報を入力してください。</h3>
+<ul class="ref"><li><a class="blank" href="https://jra.jp/faq/pop04/1_15.html" target="_blank">加入者情報とは</a></li>
+</ul>
+
+<table class="input" cellpadding="0" cellspacing="0">
+	<tbody><tr>
+		<form name="FORM1" onsubmit="JavaScript:ToModernMenu();return false;"></form>
+		<td><span class="title">加入者番号</span></td>
+		<td><span class="type"><input type="text" name="i" size="14" maxlength="8" autocomplete="off" value="***MASKED***" tabindex="1" style=""><br>半角数字（8桁）</span></td>
+		<td rowspan="3">
+			<p class="buttonModern">
+				<a href="#" onclick="JavaScript:ToModernMenu();return false;" title="ネット投票メニューへ" tabindex="5"></a>
+			</p>
+			<div class="loginInfoLink">加入者情報がご不明な方は<a href="https://www.clubjranet.jra.go.jp/clubjranet_pc/minfo/PmemberInfoInqInputO" target="_blank" tabindex="6">こちら</a></div>
+		</td>
+		
+	</tr>
+	<tr>
+		<form name="FORM2" onsubmit="JavaScript:ToModernMenu();return false;"></form>
+		<td><span class="title">暗証番号</span></td>
+		<td><span class="type"><input type="password" name="p" size="10" maxlength="4" autocomplete="off" tabindex="2" style=""><br>半角数字（4桁）</span></td>
+		<td>&nbsp;</td>
+		
+	</tr>
+	<tr>
+		<form name="FORM3" onsubmit="JavaScript:ToModernMenu();return false;"></form>
+		<td><span class="title">P-ARS番号</span></td>
+		<td><span class="type"><input type="text" name="r" size="10" maxlength="4" autocomplete="off" value="***MASKED***" tabindex="3" style=""><br>半角数字（4桁）</span></td>
+		<td>&nbsp;</td>
+		<input type="HIDDEN" name="uh" value="***MASKED***" style=""><input type="HIDDEN" name="inetid" value="***MASKED***" style=""><input type="HIDDEN" name="g" value="***MASKED***" style="">
+		
+	</tr>
+</tbody></table>
+<form name="FORM4" action="">
+	<table cellpadding="0" cellspacing="0">
+		<tbody><tr>
+			<td class="s-080chktd1">&nbsp;</td>
+			<td class="s-080chktd2"><input type="checkbox" name="saveCookie" class="s-080chk" tabindex="4" style="">&nbsp;<span>次回から暗証番号のみを入力</span></td>
+			<td>&nbsp;</td>
+		</tr>
+	</tbody></table>
+</form>
+
+</div>
+
+<div class="siteWarning">
+	★サイト利用のご注意★<br>
+	<ul>
+		<li>ブラウザの戻る、進む、更新は押さないでください。</li>
+		<li>キーボードのF5キーは押さないでください。</li>
+		<li>Cookieを有効にしてください。</li>
+	</ul>
+</div>
+
+</div></div>
+<div id="switch_area"></div>
+<div id="contract_area" class="displayNone">
+	<div class="bg-block bg-block_modern">
+		<div class="bg-block2 s-080">
+			<h2 id="contractH2">約定のご確認</h2>
+			<div id="contractMsgArea" class="contractMsgArea contractMsgAreaLimit"></div>
+			<a id="allContractBtn" href="javascript:void(0);" onclick="javascript:DispAllContract();" class="allContractBtn">全文を表示</a>
+			<div class="pdfDownloadLinkArea">
+				<a id="pdfDownloadLink" href="" target="_blank" class="pdfDownloadLink" onclick="javascript:ActiveAgreeBtn();">
+					<img class="pdf_icon" src="tmpl/images/PDF_32.png" alt="pdf">
+					約定をダウンロード（PDFファイル）
+				</a>
+			</div>
+			<div class="contractWarnMsg">約定を全てお読みいただくか、約定（PDFファイル）をダウンロードされるまで、約定にご同意いただくことはできません。</div>
+			<div id="agreeBtnArea" class="agreeBtnArea"></div>
+			<div class="contractNoAgreeMsg">※同意しない場合は画面を閉じてください。</div>
+			<div class="adobeArea">
+				<div class="adobeMessage">
+					<span>
+						PDF形式のファイルをご覧になるためには、Adobe Acrobat Readerが必要です。<br>
+						<a href="http://get.adobe.com/jp/reader/" target="_blank">
+							Adobe Acrobat Readerはアドビ株式会社より提供されています。（無償）
+						</a>
+					</span>
+				</div>
+				<div>
+					<a href="http://get.adobe.com/jp/reader/" class="adobeLogo" target="_blank">
+						<img src="tmpl/images/Get-Adobe-Acrobat-Reader-badge.png" alt="Get Adobe Acrobat Reader">
+					</a>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script language="JavaScript">
+<!--
+function fOnLoad(){
+	if(document.FORM1.i.value == "" ){
+		if((g080_cUserId != "") && (g080_cPars != "")){
+			document.FORM1.i.value=g080_cUserId;
+			document.FORM3.r.value=g080_cPars;
+			document.FORM2.p.focus();
+		}else{
+			document.FORM1.i.focus();
+		}
+	}else{
+		document.FORM2.p.focus();
+	}
+
+	if((g080_cUserId != "") && (g080_cPars != "")){
+		document.FORM4.saveCookie.checked = true;
+	}
+}
+
+function numchk(formData){
+	var chkcar = "0123456789";
+	var chkFlg = 0;
+	for(var numcnt=0; numcnt<formData.length; numcnt++ )
+	{
+		if(chkcar.indexOf(formData.charAt(numcnt)) == -1 ){
+			chkFlg = 1;
+		}
+	}
+	if(chkFlg != 0){return false;}
+	else{return true;}
+}
+//-->
+</script>
+<div id="footer" class="footer">
+	<div class="copy text-center">Copyright © Japan Racing Association.</div>
+</div>
+<div id="footerIntl" class="footerIntl displayNone">
+	<div class="copy text-center">Copyright © Japan Racing Association.</div>
+</div>
+
+
+</body></html>

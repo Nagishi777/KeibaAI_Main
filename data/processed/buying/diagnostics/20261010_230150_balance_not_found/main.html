@@ -1,0 +1,559 @@
+<!-- url: https://www.ipat.jra.go.jp/2017/pw_890_i.cgi#!/ -->
+<!DOCTYPE html><html lang="ja"><head><style type="text/css">@charset "UTF-8";[ng\:cloak],[ng-cloak],[data-ng-cloak],[x-ng-cloak],.ng-cloak,.x-ng-cloak,.ng-hide:not(.ng-hide-animate){display:none !important;}ng\:form{display:block;}.ng-animate-shim{visibility:hidden;}.ng-anchor{position:absolute;}</style>
+    <meta charset="utf-8">
+    <title>JRA　ネット投票</title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <link rel="stylesheet" href="tmpl/app_260206.css">
+    <link rel="apple-touch-icon-precomposed" href="/tmpl/images/ipat_icon.png">
+  </head>
+  <body ng-class="{'modal-open': modal, 'is-stop': oOperation.isStop(), 'print-result': printablemode, 'print-win5-result': printableWIN5mode}">
+
+    <div id="main" class="ipat-main" ng-class="{noprint: printmode, 'template-error': templateError}">
+      <!-- uiView: --><ui-view class="ng-scope"><!-- ngIf: vm.requestFailedFlag -->
+
+<navbar b-small-size="true" b-show-refer="vm.bShowRefer" class="ng-scope ng-isolate-scope"><div id="ipat-navbar">
+  <div class="container relative" ng-class="{'container-s': vm.bSmallSize == true}">
+    <div class="brand pull-left">
+      <a ui-sref="home" ui-sref-opts="{reload: true}" ng-click="vm.clickLogo()" href="#!/">
+        <h1><img src="tmpl/images/logo.gif" width="123" height="33" alt="JRAネット投票"></h1>
+      </a>
+    </div>
+    <div class="pull-left">
+      <ul class="ipat-navbar-nav">
+        <li>
+          <form method="post" action="" target="_blank" rel="opener" class="ng-pristine ng-valid">
+            <!-- ngIf: vm.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_S_PAT --><button class="btn btn-default ng-scope" ng-click="vm.clickPayment()" ng-disabled="vm.isDisabled()" ng-if="vm.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_S_PAT" disabled="disabled">
+              <span>入出金</span>
+            </button><!-- end ngIf: vm.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_S_PAT -->
+            <!-- ngIf: vm.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_A_PAT -->
+            <input type="hidden" name="inetid" value="***MASKED***">
+            <input type="hidden" name="uh" value="***MASKED***">
+            <input type="hidden" name="u" value="***MASKED***">
+            <input type="hidden" name="nbc" value="***MASKED***">
+            <input type="hidden" name="i" value="***MASKED***">
+            <input type="hidden" name="nbf" value="***MASKED***">
+            <input type="hidden" name="mpnf" value="***MASKED***">
+            <input type="hidden" name="local" value="***MASKED***">
+          </form>
+        </li>
+        <li>
+          <form method="post" action="" target="_blank" class="ng-pristine ng-valid">
+            <button type="submit" class="btn btn-default" ng-click="vm.clickRaceInfo()">レース情報</button>
+            <input type="hidden" name="cname" value="***MASKED***">
+          </form>
+        </li>
+        <li>
+          <button type="button" class="btn btn-default btn-reference" ng-click="vm.toggleShowRefer()">投票履歴</button>
+        </li>
+      </ul>
+    </div>
+    <ng-transclude></ng-transclude>
+    <bet-refer b-visible="vm.bShowRefer" n-pay-easy-flag="vm.nPayEasyFlag" class="ng-isolate-scope"><div class="ipat-bet-refer-overlay ng-hide" ng-show="vm.bVisible" aria-hidden="true"></div>
+<div class="ipat-bet-refer ng-hide ng-isolate-scope" ng-show="vm.bVisible" role="dialog" tab-focus="vm.bVisible" navbar="true" aria-hidden="true">
+<horse-combi-modal oa-data="vm.oaHorseCombiModal" b-horse-combi-visible="vm.bVisibleHorseCombiModal" n-total-num="vm.nHorseSetNum" c-bet-flag="vm.oSelectedData.betFlag.id" class="ng-isolate-scope"><div id="foreground" class="horse-combi-modal block box-group ng-hide animate ng-isolate-scope" ng-show="vm.bHorseCombiVisible" tab-focus="vm.bHorseCombiVisible" aria-hidden="true">
+    <div class="selection-list">
+        <div class="overlay animate fade ng-hide" ng-show="vm.bHorseCombiVisible" aria-hidden="true"></div>
+        <div class="dialog animate zoom ng-isolate-scope ng-hide" ng-show="vm.bHorseCombiVisible" tab-focus="vm.bHorseCombiVisible" aria-hidden="true">
+            <div class="dialog-header gutter text-lg clearfix">
+                <div class="pull-left" ng-class="{basic: vm.cBetFlag === vm.CO_BET_FLAG.CC_BASIC, intl: vm.cBetFlag === vm.CO_BET_FLAG.CC_INTL}">
+                    <h1>組合せ確認</h1>
+                    <span class="text ng-binding"></span>
+                    <span class="text ng-binding"></span><!-- 空白類文字対策のため、改行をコメントアウト
+                    --><!-- ngIf: vm.isMulti(vm.oaDisplayHorseCombi) -->
+                    <strong class="ng-binding">0</strong><span class="ng-binding">組</span>
+                </div>
+                <button class="btn btn-default btn-lg pull-right" ng-click="vm.bHorseCombiVisible=false;">閉じる</button>
+            </div>
+
+            <!-- ngIf: vm.bScrollArea -->
+        </div>
+    </div>
+</div>
+</horse-combi-modal>
+<win5-horse-combi-modal o-match-list="vm.oWIN5MatchList" b-visible="vm.bVisibleWIN5HorseCombiModal" class="ng-isolate-scope"><div id="foreground" class="win5-horse-combi-modal block box-group ng-hide" ng-show="vm.bVisible" aria-hidden="true">
+    <div class="selection-list" ng-class="{'with-footer' : vm.oHorseCombiPager.canPaging()}">
+        <div class="overlay ng-hide" ng-show="vm.bVisible" aria-hidden="true"></div>
+        <div class="dialog ng-isolate-scope ng-hide" ng-show="vm.bVisible" tab-focus="vm.bVisible" aria-hidden="true">
+          <div class="dialog-header gutter text-lg clearfix">
+            <div class="pull-left">
+              <h1>組合せ確認</h1>
+              <span class="text ng-binding"></span>
+                <strong class="ng-binding"></strong>組
+              </div>
+              <button class="btn btn-default btn-lg pull-right" ng-click="vm.bVisible=false;">閉じる</button>
+            </div>
+            <!-- ngIf: vm.bScrollArea --><div class="dialog-body gutter ng-scope" ng-if="vm.bScrollArea">
+                <table>
+                    <thead>
+                        <tr>
+                            <!-- ngRepeat: oWin5race in vm.oMatchList.oaWin5race -->
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- ngRepeat: oHorseCombi in vm.oHorseCombiPager.data -->
+                    </tbody>
+                </table>
+            </div><!-- end ngIf: vm.bScrollArea -->
+            <!-- ngIf: vm.oHorseCombiPager.canPaging() -->
+        </div>
+    </div>
+</div>
+</win5-horse-combi-modal>
+
+  <!-- ngIf: !vm.bShowBetReferDetail --><div class="bet-refer bet-refer-list ng-scope" ng-if="!vm.bShowBetReferDetail">
+
+    <div class="bet-refer-inner container ng-hide" ng-show="vm.bVisible &amp;&amp; !vm.bShowBetReferDetail" aria-hidden="true">
+      <div class="bet-refer-inner-inner">
+        <div class="result-header block gutter clearfix" ng-class="{'show-pay-easy': vm.nPayEasyFlag === vm.CN_IS_SHOW_PAYEASY}">
+          <div class="pull-left">
+            <h1 class="text text-lg">投票履歴一覧</h1>
+          </div>
+          <button class="btn btn-default btn-lg pull-right" ng-click="vm.close()">閉じる</button>
+        </div><!-- /.result-header -->
+        <div class="result-body-wrapper block clearfix">
+          <div class="result-body block clearfix" tabindex="">
+            <div class="result-body-inner block gutter">
+              <h2 class="page-header nomargin block-p-bs">
+                当日分・前日分の投票履歴をご確認いただけます。<br>「受付番号」を選択すると、投票内容を表示します。<button class="block-inline btn-help block-m-bxs" title="ヘルプ" role="button" tabindex="0"></button><br>
+                ※「受付番号」「受付番号数」は「地方」を除く購入分を表示しています。<br>
+                　その他の項目は、「JRA」「WIN5」「海外」「地方」を合わせた内容です。
+              </h2>
+
+              <div class="block block-m-bs box gutter radius">
+                <form class="block block-m-txs ng-pristine ng-valid">
+                  <!-- <span class="text block-m-rs"></span> -->
+                  <label for="refer-today">
+                    <input type="radio" id="refer-today" name="nSelectedDay" ng-model="vm.oInput.nSelectedDay" ng-change="vm.changeDay()" ng-value="***MASKED***" class="ng-pristine ng-untouched ng-valid ng-not-empty" value="***MASKED***" aria-invalid="false"><span class="check horizontal"></span> 当日分　
+                  </label>
+                  <label for="refer-before">
+                    <input type="radio" id="refer-before" name="nSelectedDay" ng-model="vm.oInput.nSelectedDay" ng-change="vm.changeDay()" ng-value="***MASKED***" class="ng-pristine ng-untouched ng-valid ng-not-empty" value="***MASKED***" aria-invalid="false"><span class="check horizontal"></span> 前日分
+                  </label>
+                  <div class="divider"></div>
+                  <span class="text block-m-rs">照会内容</span>
+                  <label for="refer-normal">
+                    <input type="checkbox" id="refer-normal" name="released" ng-model="vm.oInput.bBasicFlg" ng-change="vm.changeBetType()" class="ng-pristine ng-untouched ng-valid ng-not-empty" aria-invalid="false"><span class="check horizontal"></span> JRA　
+                  </label>
+                  <label for="refer-int">
+                    <input type="checkbox" id="refer-int" name="released" ng-model="vm.oInput.bIntlFlg" ng-change="vm.changeBetType()" class="ng-pristine ng-untouched ng-valid ng-not-empty" aria-invalid="false"><span class="check horizontal"></span> 海外　
+                  </label>
+                  <label for="refer-win5">
+                    <input type="checkbox" id="refer-win5" name="released" ng-model="vm.oInput.bWIN5Flg" ng-change="vm.changeBetType()" class="ng-pristine ng-untouched ng-valid ng-not-empty" aria-invalid="false"><span class="check horizontal"></span> WIN5
+                  </label>
+                </form>
+              </div>
+              <div class="refer-club-refresh-area">
+                <div class="block referlink">
+                  <form name="FORM_REFER" method="post" action="" target="_blank" class="ng-pristine ng-valid">
+                    <span class="page-header">過去分（60日間）の投票履歴等の確認は<a href="" ng-click="vm.clickBetReferSiteLink()">こちら</a></span>
+                    <input type="hidden" name="inetid" value="***MASKED***">
+                    <input type="hidden" name="uh" value="***MASKED***">
+                    <input type="hidden" name="u" value="***MASKED***">
+                    <input type="hidden" name="i" value="***MASKED***">
+                    <input type="hidden" name="local" value="***MASKED***">
+                    <input type="hidden" name="bac" value="***MASKED***">
+                  </form>
+                </div>
+                <div class="block gutter">
+                  <time class="ng-binding"></time>現在 <button class="btn btn-default btn-lg" ng-click="vm.refresh()">表示更新</button>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-sm-7 inquiry-col">
+                  <div class="flex">
+                    <!-- ngRepeat: (tableIndex, range) in vm.oaBetReferListRange -->
+                  </div>
+
+                </div>
+
+                <div class="col-sm-5 balance-col">
+                  <table class="table table-ipat nohover">
+                    <thead>
+                      <tr>
+                        <th colspan="4" class="text-center">購入状況
+                          <!-- ngIf: vm.oInput.nSelectedDay === vm.CO_SELECTED_DAY.CN_THE_DAY && vm.isApatUser() -->
+                          <!-- ngIf: vm.oInput.nSelectedDay === vm.CO_SELECTED_DAY.CN_THE_DAY && !vm.isApatUser() --><button class="block-inline btn-help block-m-ls ng-scope" ng-if="vm.oInput.nSelectedDay === vm.CO_SELECTED_DAY.CN_THE_DAY &amp;&amp; !vm.isApatUser()" title="ヘルプ" role="button" tabindex="0"></button><!-- end ngIf: vm.oInput.nSelectedDay === vm.CO_SELECTED_DAY.CN_THE_DAY && !vm.isApatUser() -->
+                          <!-- ngIf: vm.oInput.nSelectedDay === vm.CO_SELECTED_DAY.CN_BEFORE_DAY -->
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td class="header-column">受付番号数</td>
+                        <td class="text-right ng-binding">件</td>
+                      </tr>
+                      <!-- ngIf: vm.oUserInfo.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_A_PAT && vm.isTheDay() -->
+                      <!-- ngIf: vm.isTheDay() --><tr ng-if="vm.isTheDay()" class="ng-scope">
+                        <td class="header-column">累計購入金額</td>
+                        <td class="text-right ng-binding">円</td>
+                      </tr><!-- end ngIf: vm.isTheDay() -->
+                      <!-- ngIf: vm.isTheDay() --><tr ng-if="vm.isTheDay()" class="ng-scope">
+                        <td class="header-column">累計払戻金額</td>
+                        <td class="text-right ng-binding">円</td>
+                      </tr><!-- end ngIf: vm.isTheDay() -->
+                      <!-- ngIf: vm.isTheDay() --><tr ng-if="vm.isTheDay()" class="ng-scope">
+                        <td class="header-column">1日分購入金額</td>
+                        <td class="text-right ng-binding">円</td>
+                      </tr><!-- end ngIf: vm.isTheDay() -->
+                      <!-- ngIf: vm.isTheDay() --><tr ng-if="vm.isTheDay()" class="ng-scope">
+                        <td class="header-column">1日分払戻金額</td>
+                        <td class="text-right ng-binding">円</td>
+                      </tr><!-- end ngIf: vm.isTheDay() -->
+                      <!-- ngIf: vm.isTheDay() --><tr ng-if="vm.isTheDay()" class="ng-scope">
+                        <td class="header-column">購入限度額</td>
+                        <td class="text-right ng-binding">円</td>
+                      </tr><!-- end ngIf: vm.isTheDay() -->
+                      <!-- ngIf: vm.isTheDay() --><tr ng-if="vm.isTheDay()" class="ng-scope">
+                        <td class="header-column">購入可能件数</td>
+                        <td class="text-right ng-binding">件</td>
+                      </tr><!-- end ngIf: vm.isTheDay() -->
+                    </tbody>
+                  </table>
+                </div>
+              </div><!-- /.row -->
+            </div><!-- /.result-body-inner -->
+          </div><!-- /.result-body -->
+        </div><!-- /.result-body-wrapper -->
+        <div class="list-loading ng-hide" ng-show="vm.bIsLoading" aria-hidden="true">
+          <div class="inner">
+            <img src="tmpl/images/loading-sm.gif" width="105" alt="">
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+
+
+  </div><!-- end ngIf: !vm.bShowBetReferDetail --><!-- /.bet-refer -->
+
+  <!-- ngIf: vm.bShowBetReferDetail --><!-- /.bet-refer -->
+
+</div>
+</bet-refer>
+  </div>
+</div>
+</navbar>
+<div class="ipat-breadcrumb container container-s ng-scope">
+  <div class="pull-left">
+    <ul class="breadcrumb sr-only">
+      <li>投票メニュー</li>
+    </ul>
+    <h1>投票メニュー</h1>
+  </div>
+  <div class="pull-right breadcrumb"><a ui-sref="logout" href="#!/logout">ログアウト</a></div>
+</div>
+<main class="ipat-menu main-container container container-s main-content block-p-b ng-scope" set-height="" style="min-height: 650px;">
+  <div class="row">
+    <div class="block-inline box-grou" ng-class="{'btn-deposit':vm.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_S_PAT, 'available':vm.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_A_PAT}">
+      <div class="block box gutter radius clearfix">
+        <!-- ngIf: vm.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_S_PAT --><table class="ipat-menu-table-purchase">
+          <tbody>
+          <!-- ngIf: vm.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_A_PAT -->
+          <!-- ngIf: vm.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_S_PAT -->
+          <!-- ngIf: vm.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_S_PAT -->
+          <tr>
+            <td class="possible-number">購入可能件数</td>
+            <td class="possible-number text-right ng-binding">9,000件</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="block-inline" ng-class="{'purchase-deposit': vm.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_S_PAT, 'purchase': vm.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_A_PAT}">
+      <div class="block box block-purchase gutter radius text-center" ng-class="{'purchase-zero': vm.isPurchazeZero() &amp;&amp; !vm.isPaymentDisabled()}">
+        <!-- ngIf: vm.isPurchazeZero() && !vm.isPaymentDisabled() -->
+        <form method="post" action="" target="_blank" rel="opener" class="ng-pristine ng-valid">
+          <!-- ngIf: vm.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_S_PAT -->
+          <!-- ngIf: vm.cNetbankFlag === vm.CO_NETBANK_TYPE.CC_A_PAT -->
+          <input type="hidden" name="inetid" value="***MASKED***">
+          <input type="hidden" name="uh" value="***MASKED***">
+          <input type="hidden" name="u" value="***MASKED***">
+          <input type="hidden" name="nbc" value="***MASKED***">
+          <input type="hidden" name="i" value="***MASKED***">
+          <input type="hidden" name="nbf" value="***MASKED***">
+          <input type="hidden" name="mpnf" value="***MASKED***">
+          <input type="hidden" name="local" value="***MASKED***">
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ngIf: vm.nMemberSettingLimitFlag === vm.CN_MEMBER_SETTING_LIMIT_STATUS --><!-- /.ipat-gamble -->
+
+  <h2 class="page-header">
+    投票はこちらから <button class="block-inline btn-help block-m-rxs" title="ヘルプ" role="button" tabindex="0"></button>
+  </h2>
+  <div class="ipat-menu-nav block block-m-b box radius">
+    <div class="block-group block-group-justified gutter-sm">
+      <div class="block gutter-sm">
+        <button ui-sref="bet.basic" class="btn btn-default btn-lg btn-block btn-size" ng-disabled="vm.bIsBetInActiveOrZeroAvailableNum" title="出馬表から馬を選択する方式です。" href="#!/bet/basic" disabled="disabled">
+          <div class="text text-primary-dark disabled" ng-class="{'disabled': vm.bIsBetInActiveOrZeroAvailableNum}">通常
+            <small>投票</small>
+          </div>
+          <div class="gutter-sm btn-inner-image normal">
+            <img src="tmpl/images/home/bet-menu-normal.gif" width="85%" alt="">
+          </div>
+        </button>
+      </div>
+      <div class="block gutter-sm">
+        <button ui-sref="bet.odds.type" class="btn btn-default btn-lg btn-block btn-size" ng-disabled="vm.bIsBetInActiveOrZeroAvailableNum" title="オッズ表から選択する方式です。" href="#!/bet/odds/type" disabled="disabled">
+          <div class="text text-primary-dark disabled" ng-class="{'disabled': vm.bIsBetInActiveOrZeroAvailableNum}">オッズ
+            <small>投票</small>
+          </div>
+          <div class="gutter-sm btn-inner-image odds">
+            <img src="tmpl/images/home/bet-menu-odds.gif" width="100%" alt="">
+          </div>
+        </button>
+      </div>
+      <div class="block gutter-sm">
+        <button ui-sref="bet.card.basic" class="btn btn-default btn-lg btn-block btn-size" ng-disabled="vm.bIsBetInActiveOrZeroAvailableNum" title="実際のマークカード同様に選択する方式です。" href="#!/bet/card/basic" disabled="disabled">
+          <div class="text text-primary-dark card-btn disabled" ng-class="{'disabled': vm.bIsBetInActiveOrZeroAvailableNum}">
+            <small>マークカード</small>
+          </div>
+          <div class="gutter-sm btn-inner-image card">
+            <img src="tmpl/images/home/bet-menu-card.gif" width="100%" alt="">
+          </div>
+        </button>
+      </div>
+      <div class="block gutter-sm">
+        <button ui-sref="bet.forecast" class="btn btn-default btn-lg btn-block btn-size" ng-disabled="vm.bIsBetInActiveOrZeroAvailableNum" title="予想印を設定した馬の組合せから選択する方式です。" href="#!/bet/forecast" disabled="disabled">
+          <div class="text text-primary-dark disabled" ng-class="{'disabled': vm.bIsBetInActiveOrZeroAvailableNum}">予想印
+            <small>投票</small>
+          </div>
+          <div class="gutter-sm btn-inner-image forecast">
+            <img src="tmpl/images/home/bet-menu-guess.gif" width="100%" alt="">
+          </div>
+        </button>
+      </div>
+      <div class="block gutter-sm">
+        <button ui-sref="bet.pack" class="btn btn-default btn-lg btn-block btn-size" ng-disabled="vm.bIsBetInActiveOrZeroAvailableNum" title="用意されたパックから選択する方式です。" href="#!/bet/pack" disabled="disabled">
+          <div class="text text-primary-dark disabled" ng-class="{'disabled': vm.bIsBetInActiveOrZeroAvailableNum}">パック
+            <small>投票</small>
+          </div>
+          <div class="gutter-sm btn-inner-image pack">
+            <img src="tmpl/images/home/bet-menu-pack.gif" width="100%" alt="">
+          </div>
+        </button>
+      </div>
+    </div><!-- /.block-group -->
+
+    <div class="block block-win5">
+      <div class="block-m-ls block-m-rxs">
+        <button ui-sref="win5home" class="btn btn-default btn-lg btn-block btn-win5 gutter img-only" ng-disabled="vm.nWin5Flag !== vm.CN_IS_SELL" title="指定された5レースの1着を予想する投票方式です。" ng-class="{'img-only': !vm.bIsShowCarryoverArea}" href="#!/win5/home" disabled="disabled">
+          <div class="block-group">
+            <div class="block-inline block-p-r0 image-btn text-center" ng-class="{
+                'text-center': (!vm.bIsShowCarryoverArea || (!vm.bIsShowCarryoverSelectMoney &amp;&amp; !vm.bIsShowCarryoverRandomMoney))
+              }">
+              <img src="tmpl/images/home/bet-menu-win5.gif" width="80" alt="WIN5">
+            </div>
+            <!-- ngIf: vm.bIsShowCarryoverArea -->
+          </div>
+        </button>
+      </div>
+    </div>
+  </div><!-- /.ipat-menu-nav -->
+
+  <!-- ngIf: vm.nCentralAndInternationalFlag === vm.CO_IS_OPEN || vm.nLocalFlag === vm.CO_IS_OPEN --><!-- /.ipat-menu-race -->
+
+  <div class="ipat-menu-etc block block-m-b box radius">
+    <div class="block-group block-group-justified gutter-sm">
+      <div class="block gutter-sm">
+        <form method="post" action="" target="_blank" class="ng-pristine ng-valid">
+          <button type="submit" class="btn btn-default btn-lg btn-block" title="オッズ、出馬表、払戻金などの情報を確認します。" ng-click="vm.clickRaceInfo()">
+            <div class="display-table">
+              <div class="block-inline">
+                <img src="tmpl/images/home/bet-menu-race.gif" width="69" alt="">
+              </div>
+              <span class="block-inline text-left">レース情報を見る</span>
+            </div>
+          </button>
+          <input type="hidden" name="cname" value="***MASKED***">
+        </form>
+      </div>
+      <div class="block gutter-sm">
+        <button class="btn btn-default btn-lg btn-block" ng-click="vm.betHistoryWatch()" title="投票履歴を確認します。">
+          <div class="display-table">
+            <div class="block-inline">
+              <img src="tmpl/images/home/bet-menu-results.gif" width="71" alt="">
+            </div>
+            <span class="block-inline text-left">投票履歴を見る</span>
+            </div>
+        </button>
+      </div>
+      <div class="block gutter-sm">
+        <form method="post" action="" target="_self" class="ng-pristine ng-valid">
+          <button type="submit" class="btn btn-default btn-lg btn-block" title="暗証番号の変更、解約等の手続きをご案内します。" ng-click="vm.cliclChangeMemberInfo()">
+            <div class="display-table">
+              <div class="block-inline">
+                <img src="tmpl/images/home/bet-menu-user.gif" width="74" alt="">
+              </div>
+              <span class="block-inline text-left">暗証番号<wbr><span class="nowrap">変更・解約</span></span>
+            </div>
+          </button>
+          <input type="hidden" name="inetid" value="***MASKED***">
+          <input type="hidden" name="uh" value="***MASKED***">
+          <input type="hidden" name="u" value="***MASKED***">
+          <input type="hidden" name="nbc" value="***MASKED***">
+          <input type="hidden" name="i" value="***MASKED***">
+          <input type="hidden" name="nbf" value="***MASKED***">
+          <input type="hidden" name="mpnf" value="***MASKED***">
+          <input type="hidden" name="local" value="***MASKED***">
+        </form>
+      </div>
+    </div><!-- /.block-group -->
+  </div><!-- /.ipat-menu-etc -->
+
+  <div class="ipat-menu-club block block-m-b box radius">
+    <div class="block-group block-group-justified gutter-sm">
+      <div class="block gutter-sm">
+        <form method="post" action="" target="_blank" class="ng-pristine ng-valid">
+          <button type="submit" class="btn btn-default btn-lg btn-block" title="Club JRA-Net会員メニュー画面へ移動します。" ng-click="vm.clickClubJraNet()">
+            <img class="block-inline" src="tmpl/images/club-jranet.png" width="261" height="33" alt="club JRA-Net">
+          </button>
+          <input type="hidden" name="inetid" value="***MASKED***">
+          <input type="hidden" name="uh" value="***MASKED***">
+          <input type="hidden" name="u" value="***MASKED***">
+          <input type="hidden" name="i" value="***MASKED***">
+          <input type="hidden" name="local" value="***MASKED***">
+          <input type="hidden" name="bac" value="***MASKED***">
+        </form>
+      </div>
+    </div><!-- /.block-group -->
+  </div><!-- /.ipat-menu-club -->
+
+  <!-- ngIf: vm.nInfoFlag === vm.CO_SHOW_INFO.CN_IS_SHOW -->
+
+  <!-- ngIf: vm.nInfoFlag === vm.CO_SHOW_INFO.CN_IS_SHOW -->
+
+  <h2 class="page-header">
+    開催要項 <button class="block-inline btn-help block-m-rxs" title="ヘルプ" role="button" tabindex="0"></button>
+  </h2>
+
+  <div class="ipat-menu-info block clearfix">
+    <div class="block-inline block-m-bs box radius day-course-select-area">
+      <div class="block-inline day-select-area">
+        <form class="block ng-pristine ng-valid">
+          <label for="day1" class="block-m-rs">
+            <input id="day1" type="radio" name="released" ng-model="vm.nSelectedDay" ng-value="***MASKED***" ng-change="vm.changeDay()" class="ng-pristine ng-untouched ng-valid ng-not-empty" value="***MASKED***" aria-invalid="false"><span class="check horizontal"></span> 当日発売
+          </label>
+          <label for="day2">
+            <input id="day2" type="radio" name="released" ng-model="vm.nSelectedDay" ng-value="***MASKED***" ng-change="vm.changeDay()" class="ng-pristine ng-untouched ng-valid ng-not-empty" value="***MASKED***" aria-invalid="false"><span class="check horizontal"></span> 前日発売
+          </label>
+        </form>
+      </div>
+      <!-- ngIf: vm.isRaceSelling() -->
+      <!-- ngIf: vm.isRaceSelling() -->
+    </div>
+
+    <odds-getter c-button-name="vm.CC_HELD_GUIDE_UPDATE_BUTTON_NAME" on-click="vm.guideRefresh()" class="inline-odds-getter ng-isolate-scope"><div class="odds-info block block-m-bs text-right">
+  <!-- ngIf: vm.hasTime() && !vm.bAllRaceFlag -->
+  <button class="btn btn-default btn-lg ng-binding" ng-click="vm.clickRefresh()" ng-disabled="vm.bAllRaceFlag || vm.bDisabled">更新</button>
+</div>
+</odds-getter>
+
+  </div><!-- /.ipat-menu-info -->
+
+  <div class="ipat-menu-table block">
+    <table class="table race-list">
+      <thead>
+      <tr>
+        <th class="text-center race-no">レース</th>
+        <th class="text-center race-time">締切時刻</th>
+        <th class="race-name">レース名</th>
+        <th class="race-course">コース</th>
+        <th class="race-head-count">頭数</th>
+        <th class="race-cancel-no">取消馬番</th>
+      </tr>
+      </thead>
+      <tbody>
+      <!-- ngIf: !vm.isRaceSelling() --><tr ng-if="!vm.isRaceSelling()" class="ng-scope">
+        <td colspan="6">
+          <div class="text text-center no-race">発売はございません。</div>
+        </td>
+      </tr><!-- end ngIf: !vm.isRaceSelling() -->
+      <!-- ngRepeat: raceInfo in vm.oaRaceInfoForDisplay track by $index -->
+
+      </tbody>
+    </table>
+  </div><!-- /.ipat-menu-table -->
+
+</main>
+
+<footer class="footer ng-scope">
+  <div class="copy text-center">Copyright © Japan Racing Association.</div>
+</footer>
+</ui-view>
+    </div>
+
+    <!-- ngIf: isLoading --><div class="ipat-loading animate fade-out ng-scope" ng-if="isLoading">
+      <img src="tmpl/images/loading-sm.gif" width="105" alt="">
+    </div><!-- end ngIf: isLoading -->
+
+    <ipat-ticket class="ng-isolate-scope"><div class="ipat-ticket noprint ng-isolate-scope ng-hide" ng-show="vm.bVisible" tab-focus="vm.bVisible" aria-hidden="true">
+  <div class="dialog" role="dialog">
+    <div class="dialog-body block gutter">
+      <div class="dialog-body-contents block box gutter text-center" oncontextmenu="return false;">
+
+        <!-- 馬券SVG画像 -->
+        <!-- ngIf: vm.bVisible -->
+        <!--  -->
+
+        <!-- 取消馬番 -->
+        <!-- ngIf: vm.bVisible && (vm.oNb.cancelNums.length > 0 || vm.oNb.cancelFlatmates.length > 0) -->
+      </div>
+    </div>
+    <div class="dialog-footer gutter text-right">
+      <button class="btn btn-default btn-lg pull-left" ng-click="vm.clickPrint();">印刷する</button>
+      <button class="btn btn-default btn-lg btn-ok" ng-click="vm.dismiss()">閉じる</button>
+    </div>
+  </div>
+</div>
+</ipat-ticket>
+    <error-window class="ng-isolate-scope"><div class="ipat-error-window animate fade ng-hide" ng-show="vm.bVisible" aria-hidden="true">
+  <div class="dialog animate zoom ng-isolate-scope ng-hide" ng-show="vm.bVisible" role="dialog" tab-focus="vm.bVisible" aria-hidden="true">
+    <div class="dialog-header gutter sr-only">
+      <h1 class="ng-binding"></h1>
+    </div>
+    <div class="dialog-body block gutter">
+      <div class="dialog-body-contents block box gutter ng-binding" ng-bind-html="vm.cBody"></div>
+    </div>
+    <div class="dialog-footer gutter text-right">
+      <button class="btn btn-default btn-lg btn-ok ng-binding" ng-click="vm.dismiss()">OK</button>
+      <!-- ngIf: vm.nType === 2 -->
+    </div>
+  </div>
+</div>
+</error-window>
+    <!-- ngIf: oOperation.isStop() -->
+
+    <div id="noscript" style="color: red; z-index: 5000; position: fixed; display: none;">
+      JRA ネット投票ではJavaScriptを使用しています。
+      <br>JavaScriptに対応したブラウザをご利用いただくか、JavaScriptを使用するように設定してからご利用願います。
+    </div>
+    <script type="text/javascript">
+      document.getElementById('noscript').style.display="none";
+    </script>
+    <script type="text/javascript">
+      const CC_URI_NAR = 'https://n.ipat.jra.go.jp/2019/';
+      const CC_URI_NPPIN_1 = 'https://un.sp.jra.go.jp/jraaccount';
+      const CC_URI_NPPIN_2 = 'https://un.sp.jra.go.jp/jraaccount';
+      const CC_URI_NPPIN_3 = CC_URI_NPPIN_1;
+      const CC_URI_NPPIN_4 = CC_URI_NPPIN_2;
+      const CC_URL_INFO = 'https://jra.jp/JRADB/accessP.html';
+      const CC_URL_CLUBJRANET = 'https://www.clubjranet.jra.go.jp/clubjranet_pc/servlet/PILogin';
+      const CC_URL_SECTIONDETAILS = 'https://jra.jp/faq/pop04/1_32.html';
+      const CC_URL_MEMBERSETTINGLIMITSITE = 'https://limit.ipat.jra.go.jp/';
+      const CC_URL_MEMBERSETTINGLIMITDETAILS = 'https://jra.jp/company/social/disorder/izon6.html';
+      const CC_URL_BETREFERSITE = 'https://www.nvinq.jra.go.jp/jra/servlet/JRAWeb320';
+      const CC_URL_SPAT_SECTIONDETAILS = 'https://jra.jp/dento/member/soku/setsu.html';
+    </script>
+    <script src="tmpl/vendor_260206.js"></script>
+
+        <script src="tmpl/scripts_260206.js"></script>
+
+
+</body></html>

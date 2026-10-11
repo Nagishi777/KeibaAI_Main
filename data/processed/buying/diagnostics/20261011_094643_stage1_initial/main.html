@@ -1,0 +1,227 @@
+<!-- url: https://www.ipat.jra.go.jp/ -->
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"><html lang="ja"><!-- Lastupdate 2025/03/17 13:05 --><head>
+<meta http-equiv="X-UA-Compatible" content="IE=7">
+<title>JRA　ネット投票</title>
+<meta charset="utf-8">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+<meta http-equiv="Content-Style-Type" content="text/css">
+<link rel="apple-touch-icon-precomposed" href="/tmpl/images/ipat_icon.png">
+<script language="JavaScript" type="text/javascript" src="tmpl/000_231208.js"></script>
+<script language="JavaScript" type="text/javascript" src="tmpl/010_170929.js"></script>
+<script language="JavaScript" type="text/javascript">
+<!--
+var msg1 = "推奨ブラウザ以外でJRA ネット投票を利用した場合、正しく操作できない場合がありますのでご注意下さい。";
+var msg2 = "INET-ID が未入力です";
+var msg_12="&nbsp;&nbsp;<a class='blank' href='https://www.clubjranet.jra.go.jp/' target='_blank'>Club JRA-Net</a><DIV>&nbsp;&nbsp;電話・インターネット投票会員限定キャンペーンへの参加や</DIV><DIV>&nbsp;&nbsp;過去６０日間の投票内容の確認は「Club JRA-Net」から！</li>";
+var msg_13="&nbsp;&nbsp;<a class='blank' href='https://sp.gch.jp/gchW/webContents/html/top.html' target='_blank'>GREEN CHANNEL Web</a><DIV>&nbsp;&nbsp;白熱のレースをＬＩＶＥで！&nbsp;グリーンチャンネルをインターネットで楽しもう！！</DIV><DIV>&nbsp;&nbsp;当サイトは、会員制（有料）サービスです。</DIV></li>";
+var msg_14="&nbsp;&nbsp;<a class='blank' href='https://jra-van.jp/' target='_blank'>JRA-VAN</a><DIV>&nbsp;&nbsp;競馬予想に役立つ情報を提供するサービスです。</DIV><DIV>&nbsp;&nbsp;ＪＲＡ－ＶＡＮを使って、最適な競馬情報を見つけよう！</DIV><DIV>&nbsp;&nbsp;当サイトは、会員制（有料）サービスです。</DIV></li>";
+var msg_15="&nbsp;&nbsp;<a class='blank' href='https://world.jra-van.jp/' target='_blank'>JRA-VAN 海外競馬</a><DIV>&nbsp;&nbsp;ＪＲＡ－ＶＡＮが海外競馬情報を配信！</DIV><DIV>&nbsp;&nbsp;海外馬券予想に役立つ情報が盛り沢山！</DIV><DIV>&nbsp;&nbsp;</DIV></li>";
+var URL = "https://"+location.hostname+"/pw_080_i.cgi";
+var g010_nExpDate = 365;
+var g010_cExpDate_min = "Wed, 1-Jan-1902 00:00:00 GMT";
+var g010_cInetId = "";
+
+if(document.cookie){
+	g010_cInetId = GetCookie("inetid");
+	if(g010_cInetId !=""){
+		g010_cInetId = DProc(g010_cInetId);
+	}
+}
+
+//1;
+
+document.open();
+WriteCSS();
+document.close();
+// -->
+</script><link rel="stylesheet" type="text/css" href="/tmpl/ipat_k3_231208.css">
+</head>
+<body onload="javascript:setfocus()" id="top" class="header_modern">
+<div id="ipat-navbar">
+  <div class="container relative">
+    <div class="brand pull-left">
+      <img alt="JRAネット投票" src="tmpl/images/logo_modern.gif" width="123" height="33">
+    </div>
+  </div>
+</div>
+<div id="noscript" style="color: red; display: none;">
+	JRA ネット投票ではJavaScriptを使用しています。<br>JavaScriptに対応したブラウザをご利用いただくか、JavaScriptを使用するように設定してからご利用願います。
+</div>
+<script type="text/javascript">
+	document.getElementById('noscript').style.display="none";
+</script>
+
+<div class="bg-block bg-block_modern">
+<div class="bg-block2 s-010">
+<h2>INET-ID 入力</h2>
+<table class="s-010" cellpadding="0" cellspacing="0">
+<tbody><tr>
+<td>
+<div class="marks"><img alt="JRAネット投票" src="tmpl/images/Turfy.jpg" width="158" height="135"></div>
+</td>
+<td>
+
+<script language="JavaScript" type="text/javascript">
+<!--
+if(DP){
+	with(document){
+		write('<div class="input">');
+		write('<div class="form">');
+		write('<br><br><br><br><br><DIV class="red">３連単の発売開始に伴い、DreamcastではJRA ネット投票を利用することができなくなりました。<BR>');
+		write('ARS方式またはPAT方式を利用するか、携帯電話、パソコン等からJRA ネット投票をご利用願います。</DIV>');
+		write('<br><br><br><br><br><br></div>');
+	}
+}else{
+	with(document){
+		write('<div class="input">');
+		write('<div class="form"><FORM method="post" name="FORM1" onSubmit="javascript:return fSend()" action="">');
+		write('<h3>INET-ID を入力してログインしてください。</h3>');
+		write('<ul class="ref"><li><a class="blank" href="https://jra.jp/faq/pop04/1_15.html" target="_blank" tabindex="1">INET-ID とは</a></li>');
+		write('</ul>');
+		write('<table class="input" cellpadding="0" cellspacing="0">');
+		write('<tr>');
+		write('<td><span class="title">INET-ID</span></td>');
+		write('<td><span class="type"><input type="text" name="inetid" size="30" maxlength="12" autocomplete="off" tabindex="2" value="***MASKED***"><br>半角英数字（8桁）</span></td>');
+		write('<td><p class="button"><a href="#" OnClick="javascript:send();return false;" title="ログイン" tabindex="4">&nbsp;</a></p></td>');
+		write('<INPUT TYPE=HIDDEN NAME=uh VALUE="***MASKED***"><INPUT TYPE=HIDDEN NAME=g VALUE="***MASKED***"><INPUT TYPE=HIDDEN NAME=u VALUE="***MASKED***"><INPUT TYPE=HIDDEN NAME=spatflg VALUE="***MASKED***">');
+		write('</tr></table>');
+		write('<table cellpadding="0" cellspacing="0"><tr><td class="s-010chktd1">&nbsp;</td>');
+		write('<td class="s-010chktd2"><input type="checkbox" name="saveCookie" class="s-010chk" tabindex="3" >&nbsp;INET-IDを保存する</td><td>');
+		if(document.FORM1.spatflg.value != "1" && g010_cInetId != ""){
+			document.FORM1.inetid.value=g010_cInetId;
+			document.FORM1.saveCookie.checked = true;
+		}
+		write('INET-ID等がご不明な方は<a href="https://www.clubjranet.jra.go.jp/clubjranet_pc/minfo/PmemberInfoInqInputO" target="_blank">こちら</a></td>');
+		write('</tr></table>');
+		write('<table width="350" height="45" border="2" bordercolor="#ff8000" cellpadding="0" cellspacing="0" bgcolor="#ffc040">');
+		write('<tr>');
+		write('<td><font size="3.5em"><br><center><a href="https://'+location.hostname+'/sp/">スマートフォン版投票サイトはこちら</a></center><br></font></td>');
+		write('</tr>');
+		write('</table><br>');
+		write('<ul class="caution">');
+		write('<li>「INET-ID」はアルファベットの I(アイ) と O(オー) は使用しておりません。</li>');
+		write('</ul>');
+		if(SF||g000_bGC){
+			write('<p style="width:570px;height:1px;overflow:hidden;margin:2px 0 2px;border-top:1px solid #ccc;">&nbsp;</p>');
+		}else{
+			write('<p style="width:530px;height:1px;overflow:hidden;margin:2px 0 2px;border-top:1px solid #ccc;">&nbsp;</p>');
+		}
+		write('<ul class="caution">');
+		write('<li>通信エラーなどが発生した場合は、正常に投票されているか必ずご確認ください。</li>');
+		write('</ul>');
+		write('<ul class="caution">');
+		write('<li>一旦成立した投票内容は、一切、取消、変更できません。</li>');
+		write('</ul>');
+		if(SF||g000_bGC){
+			write('<p style="width:570px;height:1px;overflow:hidden;margin:2px 0 2px;border-top:1px solid #ccc;">&nbsp;</p>');
+		}else{
+			write('<p style="width:530px;height:1px;overflow:hidden;margin:2px 0 2px;border-top:1px solid #ccc;">&nbsp;</p>');
+		}
+		write('<ul class="caution">');
+		write('<li>インターネット投票会員にこれからお申込みされる方（新規登録）は<a href="https://jra.jp/dento/welcome/index.html" target="_blank">こちら</a></li>');
+		write('</ul>');
+		if(SF||g000_bGC){
+			write('<p style="width:570px;height:1px;overflow:hidden;margin:2px 0 2px;border-top:1px solid #ccc;">&nbsp;</p>');
+		}else{
+			write('<p style="width:530px;height:1px;overflow:hidden;margin:2px 0 2px;border-top:1px solid #ccc;">&nbsp;</p>');
+		}
+		write('<div class="marqueeArea">');
+		write('<div class="marquee">↓ 馬券は20歳になってから ↓　↓ JRAのギャンブル等依存症対策 ↓</div>');
+		write('</div>');
+		write('<ul class="caution">');
+		write('<li><a href="https://jra.jp/kouza/baken/#cat_info" target="_blank">馬券は20歳になってから</a>　<a href="https://jra.jp/company/social/disorder/" target="_blank">JRAのギャンブル等依存症対策</a></li>');
+		write('</ul>');
+		write('</form></div>');
+	}
+}
+// -->
+</script><div class="input"><div class="form"><form method="post" name="FORM1" onsubmit="javascript:return fSend()" action=""><h3>INET-ID を入力してログインしてください。</h3><ul class="ref"><li><a class="blank" href="https://jra.jp/faq/pop04/1_15.html" target="_blank" tabindex="1">INET-ID とは</a></li></ul><table class="input" cellpadding="0" cellspacing="0"><tbody><tr><td><span class="title">INET-ID</span></td><td><span class="type"><input type="text" name="inetid" size="30" maxlength="12" autocomplete="off" tabindex="2" value="***MASKED***" style=""><br>半角英数字（8桁）</span></td><td><p class="button"><a href="#" onclick="javascript:send();return false;" title="ログイン" tabindex="4">&nbsp;</a></p></td><input type="HIDDEN" name="uh" value="***MASKED***" style=""><input type="HIDDEN" name="g" value="***MASKED***" style=""><input type="HIDDEN" name="u" value="***MASKED***" style=""><input type="HIDDEN" name="spatflg" value="***MASKED***" style=""></tr></tbody></table><table cellpadding="0" cellspacing="0"><tbody><tr><td class="s-010chktd1">&nbsp;</td><td class="s-010chktd2"><input type="checkbox" name="saveCookie" class="s-010chk" tabindex="3" style="">&nbsp;INET-IDを保存する</td><td>INET-ID等がご不明な方は<a href="https://www.clubjranet.jra.go.jp/clubjranet_pc/minfo/PmemberInfoInqInputO" target="_blank">こちら</a></td></tr></tbody></table><table width="350" height="45" border="2" bordercolor="#ff8000" cellpadding="0" cellspacing="0" bgcolor="#ffc040"><tbody><tr><td><font size="3.5em"><br><center><a href="https://www.ipat.jra.go.jp/sp/">スマートフォン版投票サイトはこちら</a></center><br></font></td></tr></tbody></table><br><ul class="caution"><li>「INET-ID」はアルファベットの I(アイ) と O(オー) は使用しておりません。</li></ul><p style="width:570px;height:1px;overflow:hidden;margin:2px 0 2px;border-top:1px solid #ccc;">&nbsp;</p><ul class="caution"><li>通信エラーなどが発生した場合は、正常に投票されているか必ずご確認ください。</li></ul><ul class="caution"><li>一旦成立した投票内容は、一切、取消、変更できません。</li></ul><p style="width:570px;height:1px;overflow:hidden;margin:2px 0 2px;border-top:1px solid #ccc;">&nbsp;</p><ul class="caution"><li>インターネット投票会員にこれからお申込みされる方（新規登録）は<a href="https://jra.jp/dento/welcome/index.html" target="_blank">こちら</a></li></ul><p style="width:570px;height:1px;overflow:hidden;margin:2px 0 2px;border-top:1px solid #ccc;">&nbsp;</p><div class="marqueeArea"><div class="marquee">↓ 馬券は20歳になってから ↓　↓ JRAのギャンブル等依存症対策 ↓</div></div><ul class="caution"><li><a href="https://jra.jp/kouza/baken/#cat_info" target="_blank">馬券は20歳になってから</a>　<a href="https://jra.jp/company/social/disorder/" target="_blank">JRAのギャンブル等依存症対策</a></li></ul></form></div>
+
+<h3>動作確認環境</h3>
+<ul class="ref">
+	<li><a class="blank" href="https://jra.jp/dento/member/dousa/index.html" target="_blank">JRAホームページ</a>をご確認ください。</li>
+</ul>
+<h3>関連リンク</h3>
+<ul class="ref">
+	<li id="img2" class="bnr"><a class="blank" href="https://www.clubjranet.jra.go.jp/" target="_blank">
+	<img src="tmpl/images/btn_club-a_170929.gif" alt="Club JRA-Net" title="Club JRA-Net" onerror="banner_Load_error( 'img2' , msg_12);" class="bnr bnrimg"></a>
+	 <div>&nbsp;&nbsp;電話・インターネット投票会員限定キャンペーンへの参加や<br>&nbsp;&nbsp;過去６０日間の投票内容の確認は「Club JRA-Net」から！</div>
+	 <div style="clear:left"></div>
+	</li>
+	<li id="img3" class="bnr"><a class="blank" href="https://sp.gch.jp/gchW/webContents/html/top.html" target="_blank">
+	  <img src="tmpl/images/logo_gchweb.png" alt="GREEN CHANNEL Web" title="GREEN CHANNEL Web" onerror="banner_Load_error( 'img3' , msg_13);" class="bnr bnrimg"></a>
+	 <div>&nbsp;&nbsp;白熱のレースをＬＩＶＥで！<br>&nbsp;&nbsp;グリーンチャンネルをインターネットで楽しもう！！</div>
+	 <div>&nbsp;&nbsp;当サイトは、会員制（有料）サービスです。</div>
+	 <div style="clear:left"></div>
+	</li>
+	<li id="img4" class="bnr"><a class="blank" href="https://jra-van.jp/" target="_blank">
+	 <img src="tmpl/images/jravan_banner.gif" alt="JRA-VAN" title="JRA-VAN" onerror="banner_Load_error( 'img4' , msg_14);" class="bnr bnrimg"></a>
+	 <div>&nbsp;&nbsp;競馬予想に役立つ情報を提供するサービスです。<br>&nbsp;&nbsp;ＪＲＡ－ＶＡＮを使って、最適な競馬情報を見つけよう！</div>
+	 <div>&nbsp;&nbsp;当サイトは、会員制（有料）サービスです。</div>
+	 <div style="clear:left"></div>
+	</li>
+	<li id="img5" class="bnr"><a class="blank" href="https://world.jra-van.jp/" target="_blank">
+	 <img src="tmpl/images/jravan-world_banner.gif" alt="JRA-VAN 海外競馬" title="JRA-VAN 海外競馬" onerror="banner_Load_error( 'img5' , msg_15);" class="bnr bnrimg"></a>
+	 <div>&nbsp;&nbsp;ＪＲＡ－ＶＡＮが海外競馬情報を配信！<br>&nbsp;&nbsp;海外馬券予想に役立つ情報が盛り沢山！</div>
+	 <div>&nbsp;&nbsp;</div>
+	 <div style="clear:left"></div>
+	</li>
+</ul>
+<br><br>
+</div>
+
+</td>
+</tr>
+</tbody></table>
+
+</div>
+</div>
+<script language="JavaScript" type="text/javascript">
+<!--
+function send(){
+    var cCode = "";
+    var cStr = "";
+    var oDate;
+    var cExpires = "";
+
+    if( document.FORM1.inetid.value == "" ){
+        alert(msg2);
+        document.FORM1.inetid.focus();
+        return false;
+    }
+
+    if(document.FORM1.saveCookie.checked){
+        cCode = EProc(document.FORM1.inetid.value);
+        cStr = "inetid=" + cCode;
+        oDate = new Date();
+        oDate = new Date(oDate.getFullYear(),oDate.getMonth(),oDate.getDate()+g010_nExpDate-1,23,59,59,999);
+        cExpires = oDate.toGMTString();
+        cStr += "; expires=" + cExpires;
+        cStr += "; secure";
+        document.cookie = cStr;
+    }else{
+        cStr = "inetid=";
+        cStr += "; expires=" + g010_cExpDate_min;
+        cStr += "; secure";
+        document.cookie = cStr;
+    }
+
+    document.FORM1.action = URL;
+    document.FORM1.submit();
+}
+function banner_Load_error( imgID , msgID){
+     document.getElementById(imgID).style.height='auto';
+     document.getElementById(imgID).innerHTML=msgID;
+}
+// -->
+</script>
+<div class="footer">
+  <div class="copy text-center">Copyright © Japan Racing Association.</div>
+</div>
+
+
+<style>
+.bnr { height:50px }
+.bnr.bnrimg { height: 40px; width: 130px; float:left; margin: 5px 5px 5px 5px;}
+</style>
+</body></html>
