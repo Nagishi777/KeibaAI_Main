@@ -35,19 +35,12 @@ src/**/.env
 *.pem
 *.key
 credentials.json
-config.json
 
 # Database Files
 *.sqlite3
 *.db
 *.sqlite
 *.sqlite-journal
-
-# Logs and Traces
-logs/
-traces/
-*.log
-*.out
 
 # Screenshots and Media
 screenshots/
@@ -68,18 +61,6 @@ tmp/
 htmlcov/
 .mypy_cache/
 .hypothesis/
-
-# Data Files (keeping models safe)
-data/
-*.csv
-*.xlsx
-*.xls
-
-# Model Artifacts
-models/
-*.pkl
-*.pickle
-*.joblib
 
 # OS-specific
 Thumbs.db
