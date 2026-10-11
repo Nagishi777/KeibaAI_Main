@@ -12,9 +12,9 @@ from typing import Any
 import pandas as pd
 
 from src.buying.domain import BetIntent, BetType
-from src.simulator.features import INC_SHARE_COL, ODDS_COL, POOL_COL
+from src.simulator.features import DRIFT_COL, POOL_COL
 
-STRATEGY_ID = "simulator_pool_filter_v1"
+STRATEGY_ID = "anaba_steam_move_v1"
 
 
 class StrategyError(RuntimeError):
@@ -82,28 +82,27 @@ class SimulatorStrategy:
         target_date: dt.date,
         summary: Any | None = None,
     ) -> StrategyResult:
-        required = {"race_id", "horse_number", "bet_amount"}
+        required = {"race_id", "horse_number"}
         missing = required - set(frame.columns)
         if missing:
             raise StrategyError(f"シミュレータ出力に必要な列がありません: {sorted(missing)}")
         selected = frame.copy()
         if "skip_reason" in selected.columns:
             selected = selected[selected["skip_reason"].fillna("").astype(str) == ""]
-        selected["bet_amount"] = pd.to_numeric(selected["bet_amount"], errors="coerce")
         selected["horse_number"] = pd.to_numeric(selected["horse_number"], errors="coerce")
-        if selected[["bet_amount", "horse_number"]].isna().any().any():
-            raise StrategyError("シミュレータ出力の馬番または賭け金に不正値があります")
+        if selected["horse_number"].isna().any():
+            raise StrategyError("シミュレータ出力の馬番に不正値があります")
 
         intents: list[BetIntent] = []
         for row in selected.to_dict("records"):
-            raw_amount = float(row["bet_amount"])
-            amount = int(raw_amount // self.bet_unit_yen) * self.bet_unit_yen
-            if amount < self.bet_unit_yen:
-                continue
+            amount = self.bet_unit_yen  # Flat ベット（1点 = 購入単位）
             horse = int(row["horse_number"])
             metadata = {
                 key: row[key]
-                for key in ("pred_proba", ODDS_COL, "ev", POOL_COL, INC_SHARE_COL)
+                for key in (
+                    "pred_proba", "odds_used", "ev", POOL_COL, DRIFT_COL,
+                    "inc_share_5_late", "decision_snapshot_used",
+                )
                 if key in row and not pd.isna(row[key])
             }
             intents.append(
@@ -115,8 +114,8 @@ class SimulatorStrategy:
                     strategy_id=STRATEGY_ID,
                     reason_code="simulator_selected",
                     expected_odds=(
-                        float(row[ODDS_COL])
-                        if ODDS_COL in row and not pd.isna(row[ODDS_COL])
+                        float(row["odds_used"])
+                        if "odds_used" in row and not pd.isna(row["odds_used"])
                         else None
                     ),
                     metadata=metadata,

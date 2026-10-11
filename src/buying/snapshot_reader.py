@@ -9,10 +9,10 @@ import pandas as pd
 
 from src.buying.clock import JST
 from src.buying.domain import RaceInfo, SnapshotEvidence
-from src.simulator.features import DECISION_SNAPSHOT
+from src.simulator.features import LIVE_DECISION_SNAPSHOT
 
 # 購入判断に使うスナップショット。シミュレータの判断時点と必ず一致させる。
-DECISION_SNAPSHOT_LABEL = DECISION_SNAPSHOT
+DECISION_SNAPSHOT_LABEL = LIVE_DECISION_SNAPSHOT
 
 
 def snapshot_offset(label: str) -> dt.timedelta:

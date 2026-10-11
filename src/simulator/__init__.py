@@ -1,20 +1,44 @@
-"""当日オッズ・投票数による予測とモデル再学習のパッケージ。
+"""穴馬戦略（締切直前の資金流入 × 高オッズ）の予測とモデル再学習のパッケージ。
 
-``docs/pool_filter_condition_spec.md`` の条件（pool q0.75 / all / ev1.10）を、
-判断時点を 5m に前倒し（賭け5m / pool_5m / 特徴量 odds_5m・inc_share_10m_5m）
-して実運用の2プログラムに落としたもの。
+検証内容は ``docs/report/anaba_strategy_report/anaba_strategy_report.md``。
+戦略の核心は1行で書ける::
 
-    # レース当日: 5m時点オッズを取得して予測・ベット推奨を出す
+    締切直前に、10〜150倍で、直前の数分間にオッズが下がった馬を買う。
+
+    # レース当日: 2m時点オッズを取得して予測・ベット推奨を出す
     python -m src.simulator.predict_today
 
     # レース後: 確定着順を加えてモデルを再学習する
-    python -m src.simulator.retrain --start-period 202401 --end-period 202607
+    python -m src.simulator.retrain --start-period 202301 --end-period 202607
 
 双方が :mod:`src.simulator.features` の同一関数で特徴量を組むため、
 学習時と推論時で特徴量の定義がずれることはない。
 
-IMPORTANT:
-    本条件は単一分割・多重比較（108条件の探索）を含む調査結果であり、
-    walk-forward による期間安定性は未検証である。実運用の推奨ではない。
-    限界は ``docs/pool_filter_condition_spec.md`` §8 を必ず読むこと。
+構成:
+
+===========================  ====================================================
+:mod:`~src.simulator.features`        22列の特徴量の定義（学習・推論で共用）
+:mod:`~src.simulator.strategy`        購入条件の判定と Flat ベット
+:mod:`~src.simulator.retrain`         学習と確率校正、モデルの保存
+:mod:`~src.simulator.predict_today`   当日の予測と推奨 CSV の出力
+:mod:`~src.simulator.realtime_loader` 当日オッズ CSV の読み込み
+:mod:`~src.simulator.artifacts`       モデルと運用パラメータの保存・検証
+===========================  ====================================================
+
+IMPORTANT (この構成の成績は検証されていない):
+    レポートの検証値（回収率136.98% / 95%CI [109.3, 161.4]）は
+    EV>=1.20・1レース最大3点・**1分前**判断・fractional Kelly の構成である。
+    本実装は利用者の指示により EV>=1.05・1レース1点・**2分前**判断・
+    Flat100円とし、さらに総投票額5億円以上のフィルタを加えている。
+    **この組み合わせ自体の回収率は未検証**である。
+    的中率5%・平均40倍の高分散戦略であることも併せて認識して運用すること。
+
+IMPORTANT (既知の制約):
+    1. **学習は 1m / 当日判断は 2m**。過去データに 2m 列が無く、``3m`` 列は
+       全月・全行で ``5m`` と同一（JV-Link 履歴が実質 5m → 1m しか返さない）
+       ため、2m で学習する手段が無い。
+    2. **総投票額のスケールが学習と当日で違う**。当日の速報（``0B31``）が
+       返す ``hyosu_total`` は履歴（``0B41``）より 5〜12倍小さく、
+       5億円のしきい値を当日データは満たせない。
+       詳細と対処は README の §9 を参照。
 """

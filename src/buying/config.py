@@ -7,6 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.buying.domain import BuyingMode, Credentials
+from src.buying.snapshot_reader import (
+    DECISION_SNAPSHOT_LABEL,
+    snapshot_offset,
+)
 
 
 class ConfigurationError(ValueError):
@@ -127,9 +131,11 @@ def load_settings(
         headless=_bool(values, "BUYING_HEADLESS", False),
         account_alias=_get(values, "BUYING_ACCOUNT_ALIAS", "default"),
         credentials=credentials,
-        decision_lead_seconds=_int(values, "BUYING_DECISION_LEAD_SECONDS", 180),
+        # 既定値は判断時点 2m（120秒前）より後ろに置く。120 以上にすると
+        # 判断と同時に送信期限が切れ、全ての購入が見送られる（下の検証で止める）。
+        decision_lead_seconds=_int(values, "BUYING_DECISION_LEAD_SECONDS", 120),
         submit_deadline_lead_seconds=_int(
-            values, "BUYING_SUBMIT_DEADLINE_LEAD_SECONDS", 120
+            values, "BUYING_SUBMIT_DEADLINE_LEAD_SECONDS", 90
         ),
         max_clock_skew_seconds=_int(values, "BUYING_MAX_CLOCK_SKEW_SECONDS", 2),
         max_odds_age_seconds=_int(values, "BUYING_MAX_ODDS_AGE_SECONDS", 180),
@@ -171,4 +177,16 @@ def _validate_limits(settings: BuyingSettings) -> None:
         raise ConfigurationError("1レース上限が1日上限を超えています")
     if settings.submit_deadline_lead_seconds < 60:
         raise ConfigurationError("送信期限は公式締切より安全側の60秒以上にしてください")
+    # 判断時点（2m = 120秒前）より送信期限が早いと、スナップショット到着と
+    # 同時に期限切れになり、全ての購入が submit_deadline_expired で弾かれる。
+    # 黙って0点が続くのを防ぐため起動時に止める。
+    decision_offset = int(snapshot_offset(DECISION_SNAPSHOT_LABEL).total_seconds())
+    if settings.submit_deadline_lead_seconds >= decision_offset:
+        raise ConfigurationError(
+            f"BUYING_SUBMIT_DEADLINE_LEAD_SECONDS"
+            f"（{settings.submit_deadline_lead_seconds}秒）が判断時点"
+            f" {DECISION_SNAPSHOT_LABEL}（{decision_offset}秒前）以前です。"
+            " これでは判断と同時に送信期限が切れ、全ての購入が見送られます。"
+            f" {decision_offset} より小さい値（例: 90）にしてください。"
+        )
 

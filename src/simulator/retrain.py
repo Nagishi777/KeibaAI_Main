@@ -1,38 +1,46 @@
-"""レース後にモデルを再学習する単独実行プログラム（spec §4）。
+"""穴馬戦略のモデルを再学習する単独実行プログラム。
 
-過去の締切前オッズ（10m / 5m）から特徴量2列を作り、確定着順をラベルにして
-LightGBM を学習する。あわせてレース選別のしきい値（``pool_5m`` の q0.75）を
-**学習期間の分布から**求め、モデルと対で保存する。
+過去の締切前オッズ（60m/30m/10m/5m/1m）から22列の特徴量を作り、確定着順を
+ラベルにして LightGBM を学習し、isotonic 回帰で確率を校正する。
 
     # 全期間で再学習（レースが終わったらこれを実行する）
-    python -m src.simulator.retrain --start-period 202401 --end-period 202607
+    python -m src.simulator.retrain --start-period 202301 --end-period 202607
 
-    # しきい値の分位点を変える / ホールドアウト幅を変える
-    python -m src.simulator.retrain --start-period 202401 --end-period 202607 \
-        --pool-quantile 0.75 --holdout-months 6
+    # ホールドアウト幅を変える
+    python -m src.simulator.retrain --start-period 202301 --end-period 202607 \
+        --holdout-months 6
 
 出力:
 
 ==========================================================  ====================
-``data/model/simulator/win_pool_filter.txt``                学習済み Booster
-``data/model/simulator/win_pool_filter_calibrator.pkl``     isotonic 校正器
-``data/model/simulator/win_pool_filter_simulator.json``     しきい値等の運用パラメータ
+``data/model/win/win_anaba.txt``                      学習済み Booster
+``data/model/win/win_anaba_calibrator.pkl``           isotonic 校正器
+``data/model/win/win_anaba_simulator.json``           運用パラメータ
 ==========================================================  ====================
+
+IMPORTANT (学習は 1m / 当日判断は 2m):
+    過去データに 2m スナップショットが存在しないため、学習の「締切直前」は
+    ``1m`` を使う。当日の判断は指示どおり ``2m`` で行う。この時点のずれは
+    :mod:`src.simulator.features` の冒頭に記録した既知の制約である。
+
+IMPORTANT (学習期間は 2023年1月以降に限る):
+    ``1m`` スナップショットが実質的に更新されるのは 2023年以降である。
+    2016〜2021年は 98% のレースで ``5m`` と ``1m`` の総票数が同一であり、
+    この区間の特徴量を算出できない。2022年以前を混ぜると「年代の代理変数」
+    になるため、既定の開始年月を ``202301`` とし、それより前を指定した
+    場合は警告する。
 
 IMPORTANT (時系列リーク防止):
     - 学習期間の末尾 ``--holdout-months`` ヶ月を holdout として切り出し、
       early stopping と isotonic キャリブレーションはそこだけで行う。
       木の学習（fit）期間には触れさせない。
-    - ``pool_threshold`` も**学習期間の分布**から決める。予測時に当日の
-      レース群から取り直すと未来を見ない前提が崩れる（spec §5.2）。
-    - 特徴量は 10m / 5m の締切前スナップショットのみ。確定オッズ・確定票数・
-      払戻は使わない。着順はラベルとしてのみ使う。
+    - 特徴量は締切前スナップショットのみ。確定オッズ・確定票数・払戻は
+      使わない。着順はラベルとしてのみ使う。
 
-IMPORTANT (木を小さくする理由 / spec §4):
-    config 既定（``num_leaves: 113`` / ``min_data_in_leaf: 100``）は2列に
-    対して木が大きすぎ、1本目で holdout AUC が飽和して early stopping が
-    即発動し ``num_trees=1`` になる（片方の特徴量の importance が 0 になる）。
-    よって本モジュールは ``SPEC_LGBM_PARAMS`` で小さい木に上書きする。
+NOTE (確率が校正されていることが前提):
+    EV = 予測確率 × オッズ という判定は、予測確率がそのまま勝率として
+    読めることを前提にしている。よってキャリブレータが無いまま予測しては
+    ならない（:func:`src.simulator.artifacts.require_model` が止める）。
 """
 import argparse
 import logging
@@ -51,50 +59,47 @@ from src.simulator.artifacts import (
     save_params,
 )
 from src.simulator.dataset import load_finish_positions
-from src.simulator.odds_series_loader import load_odds_series
 from src.simulator.features import (
-    DECISION_SNAPSHOT,
+    DRIFT_BASE_SNAPSHOT,
     FEATURE_COLS,
     POOL_COL,
-    REQUIRED_SNAPSHOTS,
-    attach_features,
+    TRAIN_DECISION_SNAPSHOT,
+    build_features,
     describe_pool_quantiles,
     drop_incomplete_rows,
     feature_frame,
-    pool_threshold,
+    normalize_late_columns,
     race_pool,
+    required_snapshots,
 )
+from src.simulator.odds_series_loader import load_odds_series
+from src.simulator.strategy import AnabaRule
 
 logger = logging.getLogger(__name__)
 
 BET_TYPE = 'win'
 TARGET_COL = 'target_win'
 
-# 分位点。spec §5.2 の採用値は 0.75 だが、検証段階では対象レースが
-# 重賞級に限られて推奨 0 点が続くため、しきい値を緩めて 0.50 を使う。
-DEFAULT_POOL_QUANTILE: float = 0.50
+# ``1m`` が実質的に更新される最初の年月。これより前は学習に使えない。
+MIN_RELIABLE_PERIOD: str = '202301'
 
 # 学習期間の末尾から切り出す holdout の月数（early stopping / 校正に使う）
 DEFAULT_HOLDOUT_MONTHS: int = 6
 
-# spec §6 の期待値しきい値。config の ``min_ev_win``（既定 1.05）は本体
-# パイプライン向けに調整された別物なので、本条件の値をここで持つ。
-DEFAULT_MIN_EV: float = 1.10
-
-# spec §4 のハイパーパラメータ。2列モデルには小さい木が要る。
-SPEC_LGBM_PARAMS: Dict[str, object] = {
+# レポート §2.2 のハイパーパラメータ（29列・11フォールドで AUC 0.834〜0.852）
+ANABA_LGBM_PARAMS: Dict[str, object] = {
     'objective': 'binary',
     'metric': 'auc',
     'boosting_type': 'gbdt',
-    'num_leaves': 15,
-    'max_depth': 4,
+    'num_leaves': 31,
+    'max_depth': 5,
     'learning_rate': 0.03,
     'min_data_in_leaf': 200,
-    'feature_fraction': 1.0,
-    'bagging_fraction': 0.9,
+    'feature_fraction': 0.8,
+    'bagging_fraction': 0.8,
     'bagging_freq': 1,
     'lambda_l1': 0.0,
-    'lambda_l2': 1.0,
+    'lambda_l2': 5.0,
     'verbose': -1,
     'seed': 42,
 }
@@ -105,8 +110,6 @@ class RetrainResult:
     """再学習の結果サマリ。"""
 
     model_path: str
-    pool_threshold: float
-    pool_quantile: float
     n_rows: int
     n_races: int
     n_fit_rows: int
@@ -117,6 +120,7 @@ class RetrainResult:
     holdout_auc: float
     num_trees: int
     importance: List[Tuple[str, float]]
+    pool_quantiles: List[Tuple[str, float]]
 
 
 def load_training_data(
@@ -130,19 +134,31 @@ def load_training_data(
         end_period: 終了年月 (YYYYMM)
 
     Returns:
-        pd.DataFrame: 特徴量・``pool_5m``・``target_win``・``date`` を持つ表
+        pd.DataFrame: 22列の特徴量・``POOL_COL``・``target_win``・``date``
 
     Raises:
         ValueError: 着順が結合できない行がある場合（補完せず停止する）
     """
+    if start_period < MIN_RELIABLE_PERIOD:
+        logger.warning(
+            '開始年月 %s は %s より前です。%s スナップショットは 2022年以前'
+            ' ほぼ更新が取れておらず、混ぜると「年代の代理変数」になります。'
+            ' --start-period %s 以降を推奨します。',
+            start_period, MIN_RELIABLE_PERIOD, TRAIN_DECISION_SNAPSHOT,
+            MIN_RELIABLE_PERIOD,
+        )
+
     data_cfg = config.get('data', {})
     odds_series_dir = Path(
         data_cfg.get('odds_series_output_dir', 'data/processed/odds_series')
     )
+    snaps = required_snapshots(TRAIN_DECISION_SNAPSHOT)
     raw = load_odds_series(
-        odds_series_dir, start_period, end_period, snapshots=REQUIRED_SNAPSHOTS
+        odds_series_dir, start_period, end_period, snapshots=snaps
     )
-    work = attach_features(raw)
+    # 学習の「締切直前」は 1m。特徴量コードは late という名前で受け取る。
+    raw = normalize_late_columns(raw, TRAIN_DECISION_SNAPSHOT)
+    work = build_features(raw)
     work = drop_incomplete_rows(work, context='学習')
 
     # 着順（ラベル）を結合する。race_id は horses 側が int64 なので揃える。
@@ -213,7 +229,7 @@ def split_fit_holdout(
 
 
 def _sample_weight(config: dict, creator: ModelCreator, df: pd.DataFrame) -> np.ndarray:
-    """時間減衰サンプルウェイトを計算する（spec §4）。
+    """時間減衰サンプルウェイトを計算する。
 
     Args:
         config: 全体設定辞書
@@ -238,11 +254,9 @@ def run_retrain(
     *,
     start_period: str,
     end_period: str,
-    pool_quantile: float = DEFAULT_POOL_QUANTILE,
     holdout_months: int = DEFAULT_HOLDOUT_MONTHS,
-    min_ev: Optional[float] = None,
     model_filename: str = DEFAULT_MODEL_FILENAME,
-    use_spec_params: bool = True,
+    use_anaba_params: bool = True,
 ) -> RetrainResult:
     """再学習を実行し、モデル・キャリブレータ・運用パラメータを保存する。
 
@@ -250,37 +264,40 @@ def run_retrain(
         config: 全体設定辞書
         start_period: 学習開始年月 (YYYYMM)
         end_period: 学習終了年月 (YYYYMM)
-        pool_quantile: ``pool_5m`` しきい値を取る分位点
         holdout_months: 学習期間末尾から切り出す holdout の月数
-        min_ev: 予測側の既定 EV しきい値（省略時は ``DEFAULT_MIN_EV``）
         model_filename: ``data/model`` 配下の保存ファイル名
-        use_spec_params: True なら spec §4 のハイパーパラメータで上書きする。
-            False なら config の ``model.lightgbm`` をそのまま使う
+        use_anaba_params: True ならレポート §2.2 のハイパーパラメータを使う
 
     Returns:
         RetrainResult: 学習結果のサマリ
     """
     work = load_training_data(config, start_period, end_period)
 
-    # --- レース選別しきい値を学習期間の分布から決める（spec §5.2） ---
+    # レース総投票額の分布をログに残す（購入条件の5億円がどこに来るかの確認）
     pool_by_race = race_pool(work)
-    threshold = pool_threshold(pool_by_race, pool_quantile)
-    logger.warning('学習期間のレース総投票額（%s時点）の分位点:', DECISION_SNAPSHOT)
-    for label, value in describe_pool_quantiles(pool_by_race):
-        mark = ' ← 採用' if abs(value - threshold) < 1e-6 else ''
-        logger.warning('  %s: %15s 円%s', label, f'{value:,.0f}', mark)
+    quantiles = describe_pool_quantiles(pool_by_race)
+    rule = AnabaRule()
+    logger.warning(
+        '学習期間のレース総投票額（%s時点）の分位点:', TRAIN_DECISION_SNAPSHOT
+    )
+    for label, value in quantiles:
+        logger.warning('  %s: %15s 円', label, f'{value:,.0f}')
+    passed = float((pool_by_race >= rule.min_pool_yen).mean() * 100)
+    logger.warning(
+        '購入条件の総投票額しきい値 %s円 を満たすレースは学習期間の %.1f%% です',
+        f'{rule.min_pool_yen:,.0f}', passed,
+    )
 
     fit_df, holdout_df, split_date = split_fit_holdout(work, holdout_months)
 
     creator = ModelCreator(config, config.get('features_def'))
-    if use_spec_params:
-        # 2列モデルに config 既定の大きい木を使うと1本目で飽和する（spec §4）
-        creator.update_lgbm_params('lightgbm', SPEC_LGBM_PARAMS)
+    if use_anaba_params:
+        creator.update_lgbm_params('lightgbm', ANABA_LGBM_PARAMS)
         logger.warning(
-            'spec §4 のハイパーパラメータで学習します（num_leaves=%s / '
-            'max_depth=%s / min_data_in_leaf=%s）',
-            SPEC_LGBM_PARAMS['num_leaves'], SPEC_LGBM_PARAMS['max_depth'],
-            SPEC_LGBM_PARAMS['min_data_in_leaf'],
+            'レポート §2.2 のハイパーパラメータで学習します'
+            '（num_leaves=%s / max_depth=%s / min_data_in_leaf=%s / lambda_l2=%s）',
+            ANABA_LGBM_PARAMS['num_leaves'], ANABA_LGBM_PARAMS['max_depth'],
+            ANABA_LGBM_PARAMS['min_data_in_leaf'], ANABA_LGBM_PARAMS['lambda_l2'],
         )
 
     X_fit, y_fit = feature_frame(fit_df), fit_df[TARGET_COL]
@@ -309,18 +326,22 @@ def run_retrain(
     num_trees = int(booster.best_iteration or booster.num_trees())
     importance = [
         (str(row.feature), float(row.importance))
-        for row in creator.get_feature_importance(BET_TYPE, top_n=len(FEATURE_COLS)).itertuples()
+        for row in creator.get_feature_importance(
+            BET_TYPE, top_n=len(FEATURE_COLS)
+        ).itertuples()
     ]
     logger.warning(
-        '学習完了: 木 %d 本 / holdout AUC %.4f / importance %s',
-        num_trees, holdout_auc,
-        ', '.join(f'{name}: {value:,.0f}' for name, value in importance),
+        '学習完了: 木 %d 本 / holdout AUC %.4f', num_trees, holdout_auc,
     )
-    if num_trees <= 1:
+    logger.warning(
+        'importance 上位5列: %s',
+        ', '.join(f'{name}: {value:,.0f}' for name, value in importance[:5]),
+    )
+    if holdout_auc < 0.75:
         logger.warning(
-            '木が %d 本しか育っていません。1本目で holdout AUC が飽和した'
-            ' 可能性があります（spec §4）。--no-spec-params を使っている場合は'
-            ' 外して再実行してください。', num_trees,
+            'holdout AUC が %.4f と低いです。レポートの検証では 0.834〜0.852'
+            ' でした。スナップショットの取得状況を確認してください。',
+            holdout_auc,
         )
 
     # LightGBM は保存先ディレクトリを自動生成しないため先に作る
@@ -329,11 +350,9 @@ def run_retrain(
     creator.save_model(BET_TYPE, model_filename)
 
     params = SimulatorParams(
-        pool_threshold=threshold,
-        pool_quantile=float(pool_quantile),
         feature_cols=list(FEATURE_COLS),
-        min_ev=float(min_ev if min_ev is not None else DEFAULT_MIN_EV),
-        odds_snapshot=DECISION_SNAPSHOT,
+        train_decision_snapshot=TRAIN_DECISION_SNAPSHOT,
+        drift_base_snapshot=DRIFT_BASE_SNAPSHOT,
         train_start=str(work['date'].min().date()),
         train_end=str(work['date'].max().date()),
         n_train_rows=len(work),
@@ -345,8 +364,6 @@ def run_retrain(
 
     return RetrainResult(
         model_path=str(model_path),
-        pool_threshold=threshold,
-        pool_quantile=float(pool_quantile),
         n_rows=len(work),
         n_races=int(work['race_id'].nunique()),
         n_fit_rows=len(fit_df),
@@ -357,6 +374,7 @@ def run_retrain(
         holdout_auc=holdout_auc,
         num_trees=num_trees,
         importance=importance,
+        pool_quantiles=quantiles,
     )
 
 
@@ -367,27 +385,22 @@ def _parse_args() -> argparse.Namespace:
         argparse.Namespace: 解析済み引数
     """
     parser = argparse.ArgumentParser(
-        description='当日オッズ・投票数モデルを再学習する（spec §4）'
+        description='穴馬戦略のモデルを再学習する'
     )
     parser.add_argument('--config', type=str, default='config/config.yaml',
                         help='設定ファイルパス')
     parser.add_argument('--start-period', type=str, required=True,
-                        help='学習開始年月 (YYYYMM)')
+                        help=f'学習開始年月 (YYYYMM)。{MIN_RELIABLE_PERIOD} 以降を推奨')
     parser.add_argument('--end-period', type=str, required=True,
                         help='学習終了年月 (YYYYMM)')
-    parser.add_argument('--pool-quantile', type=float,
-                        default=DEFAULT_POOL_QUANTILE,
-                        help=f'{POOL_COL} しきい値を取る分位点（既定 {DEFAULT_POOL_QUANTILE}）')
     parser.add_argument('--holdout-months', type=int,
                         default=DEFAULT_HOLDOUT_MONTHS,
                         help='学習期間末尾から切り出す holdout の月数')
-    parser.add_argument('--min-ev', type=float, default=None,
-                        help=f'予測側の既定 EV しきい値（既定 {DEFAULT_MIN_EV}）')
     parser.add_argument('--model-filename', type=str,
                         default=DEFAULT_MODEL_FILENAME,
                         help='data/model 配下の保存ファイル名')
-    parser.add_argument('--no-spec-params', action='store_true',
-                        help='spec §4 のHPで上書きせず config の設定を使う')
+    parser.add_argument('--no-anaba-params', action='store_true',
+                        help='レポートのHPで上書きせず config の設定を使う')
     return parser.parse_args()
 
 
@@ -405,11 +418,9 @@ def main() -> None:
         config,
         start_period=args.start_period,
         end_period=args.end_period,
-        pool_quantile=args.pool_quantile,
         holdout_months=args.holdout_months,
-        min_ev=args.min_ev,
         model_filename=args.model_filename,
-        use_spec_params=not args.no_spec_params,
+        use_anaba_params=not args.no_anaba_params,
     )
 
     print()
@@ -419,12 +430,11 @@ def main() -> None:
           f'（{result.n_rows:,} 行 / {result.n_races:,} レース）')
     print(f'  fit / holdout: {result.n_fit_rows:,} 行 / '
           f'{result.n_holdout_rows:,} 行（{result.holdout_start}〜）')
+    print(f'  特徴量       : {len(FEATURE_COLS)} 列')
     print(f'  木の本数     : {result.num_trees}')
     print(f'  holdout AUC  : {result.holdout_auc:.4f}')
-    print(f'  pool しきい値: {result.pool_threshold:,.0f} 円'
-          f'（q{result.pool_quantile:.2f}）')
     print('  importance   : ' + ', '.join(
-        f'{name} {value:,.0f}' for name, value in result.importance
+        f'{name} {value:,.0f}' for name, value in result.importance[:8]
     ))
     print()
     print('当日は python -m src.simulator.predict_today で予測できます。')

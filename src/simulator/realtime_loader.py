@@ -5,29 +5,30 @@
 
     data/processed/realtime_odds/{YYYYMMDD}/{race_id}_tansho_realtimeodds.csv
 
-本モジュールは当日フォルダの単勝ファイルをすべて読み、10m と 5m の行を
-``[race_id, horse_number, odds_10m_raw, pool_10m_raw, odds_5m_raw, pool_5m_raw]``
-という :func:`src.simulator.features.attach_features` が期待する
-ワイド表に整形する。
+本モジュールは当日フォルダの単勝ファイルをすべて読み、穴馬戦略が必要とする
+時点（``60m / 30m / 10m / 5m`` と判断時点 ``2m``）を
+``odds_{snap}_raw`` / ``pool_{snap}_raw`` というワイド表に整形する。
+整形後は :mod:`src.simulator.features` の同じ関数で特徴量を作るため、
+当日と過去で特徴量の定義がずれることはない。
 
-学習側が読む月別 CSV（``data/processed/odds_series``）とは列名・ファイル
-構成が違うだけで、意味は同じ（``odds_win`` = 単勝オッズ / ``hyosu_total`` =
-レース総票数・百円単位）。整形後は同じ関数で特徴量を作るため、当日と
-過去で特徴量の定義がずれることはない。
+特徴量は市場スナップショットのみ（22列）なので、馬の属性は読まない。
+理由は :mod:`src.simulator.features` の冒頭の NOTE を参照
+（当日は出馬表から馬体重・斤量が取得できず、学習と当日で入力がずれるため
+特徴量から外している）。
 
 IMPORTANT (欠損を補完しない):
-    10m または 5m のオッズが取れていないレースは**予測対象から外す**。
-    片方の値で代用すると ``inc_share_10m_5m`` が 0 になり
+    判断時点（2m）または 5m のオッズが取れていないレースは**予測対象から
+    外す**。片方の値で代用すると ``drift_5_late`` が 0 になり
     「資金が動かなかった」と誤って断定することになる。
 """
 import datetime as dt
 import logging
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Iterable, List, Optional
 
 import pandas as pd
 
-from src.simulator.features import REQUIRED_SNAPSHOTS
+from src.simulator.features import LIVE_DECISION_SNAPSHOT, required_snapshots
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,11 @@ _FILE_SUFFIX = f'_{BET_TYPE}_realtimeodds.csv'
 
 # CSV 側の列名 → 整形後の列名
 _VALUE_COLS = {'odds_win': 'odds', 'hyosu_total': 'pool'}
+
+# 判断時点が欠けていたときに代用を許す時点（発走に近い順）。
+# 2m が取れていないレースを黙って捨てないための代替であり、
+# 使った場合は警告を出して CSV にも実際の時点を残す。
+FALLBACK_SNAPSHOTS: tuple[str, ...] = ('3m', '4m')
 
 
 def date_dir(realtime_dir: Path, target_date: dt.date) -> Path:
@@ -120,7 +126,7 @@ def _read_race_files(paths: List[Path]) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True, sort=False)
 
 
-def _read_snapshot(rows: pd.DataFrame, label: str) -> pd.DataFrame:
+def _read_snapshot(rows: pd.DataFrame, label: str, out_label: str) -> pd.DataFrame:
     """縦長表から1時点分を取り出し、馬単位の最新行だけを残す。
 
     同一 ``(race_id, umaban)`` が複数回保存されている場合
@@ -128,10 +134,12 @@ def _read_snapshot(rows: pd.DataFrame, label: str) -> pd.DataFrame:
 
     Args:
         rows: :func:`_read_race_files` の戻り値
-        label: 時点ラベル（列名の接尾辞に使う）
+        label: CSV 上の時点ラベル
+        out_label: 出力列名に使う時点ラベル（代用時は元の時点と異なる）
 
     Returns:
-        pd.DataFrame: [race_id, horse_number, odds_{label}_raw, pool_{label}_raw]
+        pd.DataFrame: [race_id, horse_number, odds_{out_label}_raw,
+        pool_{out_label}_raw]
 
     Raises:
         ValueError: 馬番を数値として解釈できない行がある場合
@@ -165,7 +173,7 @@ def _read_snapshot(rows: pd.DataFrame, label: str) -> pd.DataFrame:
         value = pd.to_numeric(df[src_col], errors='coerce')
         # オッズは正の倍率、票数合計は非負のみ有効。範囲外は NaN（補完しない）。
         bound = value > 0 if prefix == 'odds' else value >= 0
-        out[f'{prefix}_{label}_raw'] = value.where(bound).astype('float64')
+        out[f'{prefix}_{out_label}_raw'] = value.where(bound).astype('float64')
 
     logger.info(
         '%s 時点を読込: %s 行 / %s レース',
@@ -174,56 +182,104 @@ def _read_snapshot(rows: pd.DataFrame, label: str) -> pd.DataFrame:
     return out
 
 
+def _read_decision_snapshot(
+    rows: pd.DataFrame, decision_snapshot: str
+) -> pd.DataFrame:
+    """判断時点を読む。取れていないレースは直後の時点で代用する。
+
+    2m の取得に失敗したレースを黙って捨てると、その日の購入機会が理由なく
+    消える。よって 3m → 4m の順で代用を試み、使った時点を
+    ``decision_snapshot_used`` 列に残す。
+
+    Args:
+        rows: :func:`_read_race_files` の戻り値
+        decision_snapshot: 本来使う判断時点（``2m``）
+
+    Returns:
+        pd.DataFrame: [race_id, horse_number, odds_{decision}_raw,
+        pool_{decision}_raw, decision_snapshot_used]
+    """
+    primary = _read_snapshot(rows, decision_snapshot, decision_snapshot)
+    primary['decision_snapshot_used'] = decision_snapshot
+    have = set(primary.loc[primary[f'odds_{decision_snapshot}_raw'].notna(), 'race_id'])
+
+    extras: List[pd.DataFrame] = []
+    for fallback in FALLBACK_SNAPSHOTS:
+        missing_rows = rows[~rows['race_id'].isin(have)]
+        if not len(missing_rows) or fallback not in set(rows['snapshot_label']):
+            continue
+        alt = _read_snapshot(missing_rows, fallback, decision_snapshot)
+        alt = alt[alt[f'odds_{decision_snapshot}_raw'].notna()]
+        if not len(alt):
+            continue
+        alt['decision_snapshot_used'] = fallback
+        logger.warning(
+            '%s 時点が取れていない %s レースを %s 時点で代用します: %s',
+            decision_snapshot, f'{alt["race_id"].nunique():,}', fallback,
+            ','.join(sorted(set(alt['race_id']))),
+        )
+        extras.append(alt)
+        have |= set(alt['race_id'])
+
+    if not extras:
+        return primary
+    primary = primary[primary[f'odds_{decision_snapshot}_raw'].notna()]
+    return pd.concat([primary] + extras, ignore_index=True, sort=False)
+
+
 def load_today_snapshots(
     target_date: dt.date,
     realtime_dir: Path = DEFAULT_REALTIME_DIR,
     *,
     race_ids: Optional[Iterable[str]] = None,
+    decision_snapshot: str = LIVE_DECISION_SNAPSHOT,
 ) -> pd.DataFrame:
-    """当日の 10m / 5m を結合してワイド表にする。
+    """当日の各時点を結合してワイド表にする。
 
     Args:
         target_date: 対象日
         realtime_dir: ``data/processed/realtime_odds`` のパス
         race_ids: 指定したレースだけを読む（省略時は全レース）
+        decision_snapshot: 判断時点（既定は ``2m``）
 
     Returns:
-        pd.DataFrame: [race_id, horse_number, odds_5m_raw, pool_5m_raw,
-        odds_10m_raw, pool_10m_raw]
+        pd.DataFrame: [race_id, horse_number, odds_{snap}_raw,
+        pool_{snap}_raw（60m/30m/10m/5m/判断時点）, decision_snapshot_used]
 
     Raises:
         FileNotFoundError: 対象日の CSV が無い場合
-        ValueError: 10m と 5m が1行も対応しない場合
+        ValueError: 5m と判断時点が1行も対応しない場合
     """
-    base, decision = REQUIRED_SNAPSHOTS
+    snaps = required_snapshots(decision_snapshot)
     rows = _read_race_files(race_files(realtime_dir, target_date, race_ids))
-    frames: Dict[str, pd.DataFrame] = {
-        label: _read_snapshot(rows, label) for label in REQUIRED_SNAPSHOTS
-    }
 
-    # 両時点がそろった馬だけを対象にする。片方しか無いレースは inc_share を
-    # 作れないため、代用せず落とす（「動かなかった」と誤断定しないため）。
-    out = frames[decision].merge(
-        frames[base], on=['race_id', 'horse_number'], how='inner'
-    )
+    # 判断時点は代用を許す。他の時点はそのまま読む。
+    out = _read_decision_snapshot(rows, decision_snapshot)
+    for label in snaps:
+        if label == decision_snapshot:
+            continue
+        frame = _read_snapshot(rows, label, label)
+        # 5m は判断時点と対でドリフトを作るので内部結合（片方だけでは意味が無い）
+        how = 'inner' if label == '5m' else 'left'
+        before = len(out)
+        out = out.merge(frame, on=['race_id', 'horse_number'], how=how)
+        if how == 'inner' and len(out) < before:
+            logger.warning(
+                '%s 時点が無い %s 行を除外しました（ドリフトを作れないため）',
+                label, f'{before - len(out):,}',
+            )
+
     if not len(out):
         raise ValueError(
-            f'{base} と {decision} のオッズが1行も対応しませんでした。'
+            f'5m と {decision_snapshot} のオッズが1行も対応しませんでした。'
             f' {date_dir(realtime_dir, target_date)} の当日ファイルを確認してください。'
         )
 
-    only_base = len(frames[base]) - len(out)
-    only_decision = len(frames[decision]) - len(out)
-    if only_base or only_decision:
-        logger.warning(
-            '片方の時点にしか存在しない行を除外: %sのみ %s 行 / %sのみ %s 行',
-            base, f'{only_base:,}', decision, f'{only_decision:,}',
-        )
-
     out = out.sort_values(['race_id', 'horse_number']).reset_index(drop=True)
+    used = out['decision_snapshot_used'].value_counts().to_dict()
     logger.warning(
-        '当日オッズ読込: %s 行 / %s レース（%s）',
-        f'{len(out):,}', f'{out["race_id"].nunique():,}', target_date,
+        '当日オッズ読込: %s 行 / %s レース（%s / 判断時点の内訳 %s）',
+        f'{len(out):,}', f'{out["race_id"].nunique():,}', target_date, used,
     )
     return out
 

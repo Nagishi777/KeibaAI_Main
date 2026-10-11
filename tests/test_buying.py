@@ -10,6 +10,9 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from src.buying.audit import AuditLogger
+from src.buying.browser.base import BrowserContractError
+from src.buying.browser.diagnostics import _mask_html, _mask_text
+from src.buying.browser.playwright_client import PlaywrightIpatClient
 from src.buying.config import BuyingSettings, ConfigurationError, load_settings
 from src.buying.domain import (
     BetIntent,
@@ -80,10 +83,10 @@ def race(race_id: str = "202605040711") -> RaceInfo:
 def evidence(race_id: str = "202605040711") -> SnapshotEvidence:
     return SnapshotEvidence(
         race_id=race_id,
-        label="5m",
-        target_datetime=dt.datetime(2026, 9, 22, 15, 35, tzinfo=JST),
-        acquired_at=dt.datetime(2026, 9, 22, 15, 35, 2, tzinfo=JST),
-        source_datetime=dt.datetime(2026, 9, 22, 15, 34, tzinfo=JST),
+        label="2m",
+        target_datetime=dt.datetime(2026, 9, 22, 15, 38, tzinfo=JST),
+        acquired_at=dt.datetime(2026, 9, 22, 15, 38, 2, tzinfo=JST),
+        source_datetime=dt.datetime(2026, 9, 22, 15, 37, tzinfo=JST),
         source_age_seconds=60.0,
         status="saved",
     )
@@ -155,14 +158,14 @@ class StrategyTests(unittest.TestCase):
     def test_simulator_rows_are_filtered_and_rounded_down(self) -> None:
         frame = pd.DataFrame(
             [
-                {"race_id": "202605040711", "horse_number": 3, "bet_amount": 299, "skip_reason": "", "odds_5m": 8.2},
-                {"race_id": "202605040711", "horse_number": 4, "bet_amount": 500, "skip_reason": "ev_below_threshold"},
-                {"race_id": "202605040711", "horse_number": 5, "bet_amount": 99, "skip_reason": ""},
+                {"race_id": "202605040711", "horse_number": 3, "skip_reason": "", "odds_used": 8.2},
+                {"race_id": "202605040711", "horse_number": 4, "skip_reason": "ev_below_threshold"},
+                {"race_id": "202605040711", "horse_number": 5, "skip_reason": ""},
             ]
         )
         result = SimulatorStrategy().from_frame(frame, target_date=dt.date(2026, 9, 22))
-        self.assertEqual(len(result.intents), 1)
-        self.assertEqual(result.intents[0].amount_yen, 200)
+        self.assertEqual(len(result.intents), 2)
+        self.assertEqual(result.intents[0].amount_yen, 100)
         self.assertEqual(result.intents[0].selection, (3,))
         self.assertEqual(result.intents[0].expected_odds, 8.2)
 
@@ -183,7 +186,7 @@ class SnapshotReaderTests(unittest.TestCase):
             ).to_csv(races_dir / "20260922_jra_today_schedule.csv", index=False, encoding="utf-8-sig")
             pd.DataFrame(
                 [{
-                    "race_id": "202605040711", "snapshot_label": "5m",
+                    "race_id": "202605040711", "snapshot_label": "2m",
                     "target_datetime": "2026-09-22T15:35:00",
                     "acquired_at": "2026-09-22T15:35:02",
                     "latest_happyo_datetime": "2026-09-22T15:34:00",
@@ -251,7 +254,7 @@ class LedgerTests(unittest.TestCase):
 class ServiceTests(unittest.TestCase):
     def _strategy(self) -> object:
         frame = pd.DataFrame(
-            [{"race_id": "202605040711", "horse_number": 3, "bet_amount": 100}]
+            [{"race_id": "202605040711", "horse_number": 3}]
         )
         return SimulatorStrategy().from_frame(frame, target_date=dt.date(2026, 9, 22))
 
@@ -303,6 +306,66 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(report.accepted, 1)
             self.assertTrue(browser.closed)
 
+    def test_login_failure_is_reported_without_raising(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            settings = replace(
+                make_settings(root),
+                mode=BuyingMode.LIVE,
+                credentials=Credentials("inet", "subscriber", "pin", "pars"),
+            )
+            browser = FakeBrowser()
+
+            def fail_login(_credentials: object) -> None:
+                raise BrowserContractError("操作要素が見つかりません")
+
+            browser.login = fail_login  # type: ignore[method-assign]
+            service = PurchaseService(
+                settings,
+                Ledger(settings.ledger_path),
+                AuditLogger(settings.log_dir),
+                lambda: browser,
+                clock=lambda: dt.datetime(2026, 9, 22, 15, 38, tzinfo=JST),
+            )
+            report = service.execute(
+                self._strategy(),
+                target_date=dt.date(2026, 9, 22),
+                races={race().race_id: race()},
+                evidence={race().race_id: evidence()},
+                allow_live=True,
+            )
+            self.assertEqual(report.accepted, 0)
+            self.assertEqual(report.rejected, 1)
+            self.assertTrue(any("login:" in item for item in report.errors))
+            self.assertTrue(browser.closed)
+
+    def test_unavailable_balance_still_allows_purchase(self) -> None:
+        # 非開催日などで購入限度額が読めなくても、他のリスク審査が通れば購入する。
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            settings = replace(
+                make_settings(root),
+                mode=BuyingMode.LIVE,
+                credentials=Credentials("inet", "subscriber", "pin", "pars"),
+            )
+            browser = FakeBrowser()
+            browser.get_balance_yen = lambda: None  # type: ignore[method-assign]
+            service = PurchaseService(
+                settings,
+                Ledger(settings.ledger_path),
+                AuditLogger(settings.log_dir),
+                lambda: browser,
+                clock=lambda: dt.datetime(2026, 9, 22, 15, 38, tzinfo=JST),
+            )
+            report = service.execute(
+                self._strategy(),
+                target_date=dt.date(2026, 9, 22),
+                races={race().race_id: race()},
+                evidence={race().race_id: evidence()},
+                allow_live=True,
+            )
+            self.assertEqual(report.accepted, 1)
+
     def test_unknown_receipt_is_not_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -327,6 +390,57 @@ class ServiceTests(unittest.TestCase):
                 allow_live=True,
             )
             self.assertEqual(report.unknown, 1)
+
+
+class BalanceParsingTests(unittest.TestCase):
+    """``get_balance_yen`` の画面テキスト解釈。"""
+
+    def _parse(self, text: str) -> int | None:
+        client = PlaywrightIpatClient.__new__(PlaywrightIpatClient)
+        client._body_text = lambda: text  # type: ignore[method-assign]
+        return client.get_balance_yen()
+
+    def test_table_layout_is_parsed(self) -> None:
+        # 即PATのメニューはラベルと金額が別セル（間はタブか改行）。
+        self.assertEqual(self._parse("購入限度額\t123,400円"), 123400)
+        self.assertEqual(self._parse("購入限度額\n50,000 円"), 50000)
+
+    def test_missing_balance_row_returns_none(self) -> None:
+        # 非開催日は金額行そのものが描画されない。
+        self.assertIsNone(self._parse("購入可能件数\t9,000件\n発売はございません。"))
+
+    def test_empty_amount_cell_returns_none(self) -> None:
+        # 読み込み途中は単位だけが残る。件数を金額と誤読しないこと。
+        self.assertIsNone(self._parse("購入限度額\t円\n購入可能件数\t9,000件"))
+
+
+class DiagnosticsMaskTests(unittest.TestCase):
+    SECRETS = ("abc12345", "98765432", "1234", "5678")
+
+    def test_credential_values_are_masked(self) -> None:
+        html = (
+            '<input id="inetid" name="inetid" value="abc12345">'
+            '<input type="password" name="pin" value="1234">'
+            '<input name="pars" value="5678" type="text">'
+        )
+        masked = _mask_html(html, self.SECRETS)
+        for secret in self.SECRETS:
+            self.assertNotIn(secret, masked)
+
+    def test_button_labels_survive_masking(self) -> None:
+        # ボタン名はセレクタ修正に必要な情報なので残す（type が value の
+        # 前後どちらにあっても判定できること）。
+        html = '<input type="submit" value="ログイン"><input value="送信" type="button">'
+        masked = _mask_html(html, self.SECRETS)
+        self.assertIn('value="ログイン"', masked)
+        self.assertIn('value="送信"', masked)
+
+    def test_member_info_and_balance_are_masked(self) -> None:
+        text = "加入者番号：98765432 購入限度額: 123,400 円 残高：50,000円"
+        masked = _mask_text(text, ())
+        self.assertNotIn("98765432", masked)
+        self.assertNotIn("123,400", masked)
+        self.assertNotIn("50,000", masked)
 
 
 if __name__ == "__main__":

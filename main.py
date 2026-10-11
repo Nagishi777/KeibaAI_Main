@@ -2,7 +2,7 @@
 
     [1] JRA出馬表から当日の発走時刻を取得
     [2] 各レースの 60m/30m/10m/5m/4m/3m/2m/1m/10s 前に JV-Link からオッズ・票数を取得
-    [3] 各レースの 5m 前のオッズが揃ったら予測 → 購入ロジックに従って馬券を購入
+    [3] 各レースの 2m 前のオッズが揃ったら予測 → 購入ロジックに従って馬券を購入
     [4] 全レース終了後（最終レース発走 + 30分）にモデルを再学習
 
 使い方::
@@ -54,7 +54,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument('--retrain-delay-minutes', type=float, default=None,
                         help='最終レース発走から再学習開始までの分数（既定: config の値、無ければ 30）')
     parser.add_argument('--model-filename', default=None,
-                        help='data/model 配下のモデルファイル名（既定: simulator/win_pool_filter.txt）')
+                        help='data/model 配下のモデルファイル名（既定: win/win_anaba.txt）')
     parser.add_argument('--min-ev', type=float, default=None,
                         help='EV しきい値（既定: モデルの運用パラメータ）')
     parser.add_argument('--include-past', action='store_true',

@@ -63,6 +63,21 @@ def _parser() -> argparse.ArgumentParser:
                 help="BUYING_MODE=liveの場合に実購入を明示許可",
             )
     sub.add_parser("reconcile", help="成立不明の台帳項目を表示（自動再送しない）")
+
+    probe = sub.add_parser(
+        "probe-login",
+        help="ログイン画面だけを操作して画面ダンプを保存（購入は一切行わない）",
+    )
+    probe.add_argument(
+        "--headless",
+        action="store_true",
+        help=".env の設定に関わらずブラウザを非表示で実行する",
+    )
+    probe.add_argument(
+        "--dump-always",
+        action="store_true",
+        help="成功しても各段階の画面ダンプを保存する",
+    )
     return parser
 
 
@@ -73,12 +88,19 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model-filename", default=None)
     parser.add_argument("--min-ev", type=float, default=None)
     parser.add_argument("--fetch", action="store_true", help="シミュレータの取得処理も呼ぶ")
+    parser.add_argument(
+        "--dump-stages",
+        action="store_true",
+        help="画面操作の各段階でダンプを保存する（セレクタ調査用）",
+    )
 
 
 def _settings_for_command(args: argparse.Namespace) -> BuyingSettings:
     if args.command == "paper":
         return replace(load_settings(args.env, require_credentials=False), mode=BuyingMode.PAPER)
-    if args.command == "dry-run":
+    if args.command in {"dry-run", "probe-login"}:
+        # probe-login は購入系を呼ばないが、.env が live でも送信経路に入らない
+        # ことを設定側でも保証しておく。
         return replace(load_settings(args.env, require_credentials=True), mode=BuyingMode.DRY_RUN)
     return load_settings(args.env, require_credentials=args.command not in {"doctor", "reconcile"})
 
@@ -129,6 +151,7 @@ def _run_once(
         lambda: PlaywrightIpatClient(
             login_url=settings.login_url,
             headless=settings.headless,
+            dump_stages=bool(getattr(args, "dump_stages", False)),
         ),
     )
     report = service.execute(
@@ -139,6 +162,44 @@ def _run_once(
         allow_live=bool(getattr(args, "live", False)),
     )
     return report.__dict__
+
+
+def _probe_login(args: argparse.Namespace, settings: BuyingSettings) -> int:
+    """ログイン画面だけを操作し、セレクタ調査用の画面ダンプを残す。
+
+    レース・オッズ・台帳を参照しないため、開催時間外でも実行できる。
+    購入系メソッドは呼ばないので、馬券が送信されることはない。
+    """
+    if settings.credentials is None:
+        raise ConfigurationError(
+            f"認証情報が未設定です（{args.env} を確認してください）"
+        )
+    client = PlaywrightIpatClient(
+        login_url=settings.login_url,
+        headless=args.headless or settings.headless,
+        dump_stages=args.dump_always,
+    )
+    print(f"ログイン画面を調査します: {settings.login_url}")
+    try:
+        try:
+            client.login(settings.credentials)
+        except RuntimeError as exc:
+            # 失敗箇所のダンプは login 内で保存済み。経過を出して非ゼロ終了する。
+            print(f"\nログインに到達できませんでした:\n  {exc}", file=sys.stderr)
+            return 1
+        print("ログイン成功。")
+        balance = client.get_balance_yen()
+        if balance is None:
+            # 非開催日や入金前はメニューに金額行が出ない。異常ではない。
+            print("購入限度額: 画面に表示なし（残高による上限審査は行われません）")
+            client.dump_screen("balance_not_shown")
+        else:
+            print(f"購入限度額: {balance:,} 円")
+        if args.dump_always:
+            print(f"メニュー画面のダンプ: {client.dump_screen('menu_final')}")
+        return 0
+    finally:
+        client.close()
 
 
 def _run_day(args: argparse.Namespace, settings: BuyingSettings, target_date: dt.date) -> int:
@@ -191,6 +252,8 @@ def main() -> None:
         settings = _settings_for_command(args)
         if args.command == "doctor":
             raise SystemExit(_doctor(settings, args.env))
+        if args.command == "probe-login":
+            raise SystemExit(_probe_login(args, settings))
         if args.command == "reconcile":
             entries = Ledger(settings.ledger_path).unknown_entries()
             if not entries:

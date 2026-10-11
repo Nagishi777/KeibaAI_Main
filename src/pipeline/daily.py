@@ -4,15 +4,15 @@
         → data/processed/schedules/YYYYMMDD_jra_today_schedule.csv
     [2] 発走時刻に合わせて 60m〜10s の各時点で JV-Link からオッズ・票数を取得する
         → data/processed/realtime_odds/YYYYMMDD/{race_id}_{券種}_realtimeodds.csv
-    [3] 各レースの 5m 時点が保存されたら、そのレースを予測し購入処理を行う
+    [3] 各レースの 2m 時点が保存されたら、そのレースを予測し購入処理を行う
         → output/simulator/YYYYMMDD_{all,bets}.csv / src.buying の台帳・監査ログ
     [4] 全レース終了後（最終レース発走 + 待機時間）にモデルを再学習する
-        → data/model/simulator/win_pool_filter*.{txt,pkl,json}
+        → data/model/win/win_anaba*.{txt,pkl,json}
 
 スレッド構成::
 
     メインスレッド : run_scheduler（JV-Link COM を扱う唯一のスレッド）
-    判断スレッド   : 5m が保存されたレースを受け取り、予測 → 購入を行う
+    判断スレッド   : 2m が保存されたレースを受け取り、予測 → 購入を行う
 
 購入処理（ブラウザ操作）に時間がかかっても、判断スレッドで動くため
 他レースのオッズ取得は止まらない。CSV の読み書きは
@@ -59,7 +59,7 @@ from src.simulator.artifacts import (
     require_model,
     resolve_model_path,
 )
-from src.simulator.features import DECISION_SNAPSHOT
+from src.simulator.features import LIVE_DECISION_SNAPSHOT
 from src.simulator.predict_today import predict_from_snapshots
 from src.simulator.realtime_loader import load_today_snapshots
 from src.simulator.retrain import run_retrain
@@ -70,7 +70,7 @@ logger = logging.getLogger(__name__)
 DECISION_STATUSES = frozenset({'saved', 'saved_stale'})
 
 # config.yaml の ``pipeline`` セクションが無い場合の既定値
-DEFAULT_RETRAIN_START_PERIOD = '202401'
+DEFAULT_RETRAIN_START_PERIOD = '202301'
 DEFAULT_RETRAIN_DELAY_MINUTES = 30.0
 
 # 日次レポート・ログの出力先
@@ -185,11 +185,11 @@ def check_model(config: dict, model_filename: str) -> Optional[str]:
 
 
 def decision_race_ids(events: list[dict[str, object]]) -> list[str]:
-    """取得イベントから、判断時点（5m）が保存されたレースを取り出す。"""
+    """取得イベントから、判断時点（2m）が保存されたレースを取り出す。"""
     race_ids: list[str] = []
     for event in events:
         if (
-            event.get('snapshot_label') == DECISION_SNAPSHOT
+            event.get('snapshot_label') == LIVE_DECISION_SNAPSHOT
             and event.get('status') in DECISION_STATUSES
         ):
             race_id = str(event.get('race_id'))
@@ -232,7 +232,7 @@ class BuyingPurchaser:
 
 
 class DecisionEngine:
-    """5m が保存されたレースを予測し、推奨を購入処理へ渡す。"""
+    """2m が保存されたレースを予測し、推奨を購入処理へ渡す。"""
 
     def __init__(
         self,
@@ -293,12 +293,19 @@ class DecisionEngine:
             for intent in result.intents
         ]
         if self.purchaser is not None and result.intents:
-            record['purchase'] = self.purchaser.execute(result, target_date=self.target_date)
+            try:
+                record['purchase'] = self.purchaser.execute(
+                    result, target_date=self.target_date
+                )
+            except Exception as exc:
+                # 予測は成功しているので、購入側の失敗で記録全体を失わせない。
+                logger.exception('購入処理が失敗しました（予測結果は保持します）')
+                record['purchase_error'] = f'{type(exc).__name__}: {exc}'
         record['finished_at'] = _now_jst_naive().isoformat(timespec='seconds')
         logger.warning(
             '判断完了 %s: 推奨 %d 点 / 購入指示 %d 件 / 購入結果 %s',
             ','.join(race_ids), summary.n_bets, len(result.intents),
-            record.get('purchase', '購入なし'),
+            record.get('purchase') or record.get('purchase_error') or '購入なし',
         )
         return record
 
@@ -404,9 +411,9 @@ def run_retrain_step(
         model_filename=model_filename,
     )
     logger.warning(
-        '再学習完了: %s（学習期間 %s〜%s / %s レース / holdout AUC %.4f / しきい値 %s円）',
+        '再学習完了: %s（学習期間 %s〜%s / %s レース / 木 %d 本 / holdout AUC %.4f）',
         result.model_path, result.train_start, result.train_end,
-        f'{result.n_races:,}', result.holdout_auc, f'{result.pool_threshold:,.0f}',
+        f'{result.n_races:,}', result.num_trees, result.holdout_auc,
     )
     if result.train_end < target_date.isoformat():
         logger.warning(
@@ -531,7 +538,7 @@ class DailyPipeline:
                 race_ids = decision_race_ids(events)
                 if race_ids and worker is not None:
                     logger.info('%s 時点を保存したレースを判断待ちに追加: %s',
-                                DECISION_SNAPSHOT, ','.join(race_ids))
+                                LIVE_DECISION_SNAPSHOT, ','.join(race_ids))
                     worker.submit(race_ids)
 
             # [2] 時点別オッズ（最終レースの 10s 前まで動き続ける）
