@@ -84,7 +84,7 @@ def _parser() -> argparse.ArgumentParser:
 def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--date", default=None, help="対象日 YYYY-MM-DD（省略時はJST当日）")
     parser.add_argument("--bets-csv", type=Path, default=None, help="生成済み *_bets.csv")
-    parser.add_argument("--simulator-config", type=Path, default=Path("config/config.yaml"))
+    parser.add_argument("--simulator-config", type=Path, default=Path("config.yaml"))
     parser.add_argument(
         "--bet-type", choices=("win", "place"), default="win",
         help="券種（win=単勝 / place=複勝。place の --model-filename は data/model 配下のフォルダ）",

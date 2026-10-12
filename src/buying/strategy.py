@@ -14,8 +14,8 @@ import pandas as pd
 from src.buying.domain import BetIntent, BetType
 from src.simulator.features import DRIFT_COL, POOL_COL
 
-STRATEGY_ID = "anaba_steam_move_v1"
-PLACE_STRATEGY_ID = "anaba_place_v1"
+STRATEGY_ID = "win_steam_move_v1"
+PLACE_STRATEGY_ID = "place_steam_move_v1"
 
 # 券種ごとの戦略ID（台帳の自然キーに入り、単勝と複勝の購入を区別する）
 STRATEGY_IDS = {BetType.WIN: STRATEGY_ID, BetType.PLACE: PLACE_STRATEGY_ID}

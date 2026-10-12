@@ -31,7 +31,7 @@ from src.simulator.odds_series_loader import load_odds_series
 from src.simulator.predict_today import predict_proba
 from src.simulator.strategy import AnabaRule, apply_rule, REASON_BET
 
-cfg = build_config('config/config.yaml')
+cfg = build_config('config.yaml')
 
 # holdout 期間（木の学習に使っていない 2026-01-26 以降）で評価する
 raw = load_odds_series('data/processed/odds_series', '202602', '202607',

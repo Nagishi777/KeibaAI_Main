@@ -1,4 +1,4 @@
-"""穴馬戦略の購入判定ルールと賭け金計算。
+"""単勝モデル戦略の購入判定ルールと賭け金計算。
 
 検証内容は ``docs/report/anaba_strategy_report/anaba_strategy_report.md``。
 
@@ -98,8 +98,8 @@ REASON_SEP = '|'
 
 
 @dataclass(frozen=True)
-class AnabaRule:
-    """穴馬選別ルール。
+class WinRule:
+    """単勝選別ルール。
 
     Attributes:
         min_ev: 期待値の下限（``予測確率 × 判断時点オッズ``）
@@ -165,7 +165,7 @@ def _join_reasons(flags: Dict[str, pd.Series], index: pd.Index) -> pd.Series:
 
 
 def apply_rule(
-    df: pd.DataFrame, proba: np.ndarray, rule: AnabaRule | None = None
+    df: pd.DataFrame, proba: np.ndarray, rule: WinRule | None = None
 ) -> pd.DataFrame:
     """全馬に ``ev`` / ``skip_reason`` を付けて返す。
 
@@ -184,12 +184,12 @@ def apply_rule(
     Raises:
         ValueError: 必須列が欠けている、または判断に使う値に欠損がある場合
     """
-    rule = rule or AnabaRule()
+    rule = rule or WinRule()
     need = ['race_id', ODDS_COL, DRIFT_COL, POOL_COL]
     missing = [c for c in need if c not in df.columns]
     if missing:
         raise ValueError(
-            f'穴馬選別に必要な列がありません: {missing}。補完せず処理を停止します。'
+            f'選別に必要な列がありません: {missing}。補完せず処理を停止します。'
         )
 
     work = df.copy().reset_index(drop=True)
@@ -258,7 +258,7 @@ MIN_RACES_FOR_PCTILE: int = 6
 
 
 def _warn_if_too_few_races_for_pctile(
-    work: pd.DataFrame, rule: AnabaRule
+    work: pd.DataFrame, rule: WinRule
 ) -> None:
     """レース数が少なすぎて分位点フィルタが無意味になる場合に警告する。
 
@@ -291,7 +291,7 @@ def _warn_if_too_few_races_for_pctile(
 
 
 def _warn_if_pool_filter_blocks_everything(
-    work: pd.DataFrame, rule: AnabaRule
+    work: pd.DataFrame, rule: WinRule
 ) -> None:
     """総投票額フィルタが全レースを落としている場合に強く警告する。
 
@@ -338,7 +338,7 @@ def _warn_if_pool_filter_blocks_everything(
     )
 
 
-def _log_funnel(work: pd.DataFrame, rule: AnabaRule) -> None:
+def _log_funnel(work: pd.DataFrame, rule: WinRule) -> None:
     """どのフィルタで何頭落ちたかをログに出す（当日の確認用）。"""
     n = len(work)
     counts = {
@@ -362,17 +362,17 @@ def _log_funnel(work: pd.DataFrame, rule: AnabaRule) -> None:
     )
 
 
-def rule_from_config(config: dict) -> Tuple[AnabaRule, Dict[str, object]]:
+def rule_from_config(config: dict) -> Tuple[WinRule, Dict[str, object]]:
     """``config.yaml`` の ``strategy`` セクションからルールを作る。
 
     Args:
         config: 全体設定辞書
 
     Returns:
-        Tuple[AnabaRule, Dict[str, object]]: (ルール, 使った設定値)
+        Tuple[WinRule, Dict[str, object]]: (ルール, 使った設定値)
     """
     cfg = config.get('strategy', {}) or {}
-    rule = AnabaRule(
+    rule = WinRule(
         min_ev=float(cfg.get('min_ev', DEFAULT_MIN_EV)),
         odds_min=float(cfg.get('odds_min', DEFAULT_ODDS_MIN)),
         odds_max=float(cfg.get('odds_max', DEFAULT_ODDS_MAX)),

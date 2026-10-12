@@ -18,7 +18,7 @@ from src.simulator.odds_series_loader import load_odds_series
 from src.simulator.predict_today import predict_proba
 from src.simulator.strategy import AnabaRule, apply_rule, REASON_BET
 
-cfg = build_config('config/config.yaml')
+cfg = build_config('config.yaml')
 raw = load_odds_series('data/processed/odds_series', '202602', '202607',
                        snapshots=required_snapshots(TRAIN_DECISION_SNAPSHOT))
 w = drop_incomplete_rows(

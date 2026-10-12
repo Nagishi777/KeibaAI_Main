@@ -7,7 +7,7 @@ JRA のレース当日に、次の4つを1本のプログラム（`main.py`）�
 3. 各レースの発走**2分前**のオッズで勝率・複勝率を予測し、購入ルールに従って即PATで馬券を買う
 4. 全レース終了後にモデルを再学習する
 
-採用している戦略は「穴馬戦略」（締切直前の資金流入 × 高オッズ）で、**単勝モデル**と
+採用している戦略は「締切直前の資金流入 × 高オッズ」で、**単勝モデル**と
 **複勝モデル**の2つがあります。`main.py` は既定で両方を動かし、`--win` / `--place` で片方だけにできます。
 
 | モデル | 検証レポート |
@@ -102,15 +102,14 @@ python -m venv .venv
 
 | ファイル | 内容 | 用意の仕方 |
 | --- | --- | --- |
-| `config/config.yaml` | データ・モデルの場所、賭け金計算、再学習期間 | 同梱。必要に応じて編集 |
-| `config/features.json` | 特徴量定義（本システムでは空で可） | 同梱 |
+| `config.yaml` | データ・モデルの場所、賭け金計算、再学習期間 | 同梱。必要に応じて編集 |
 | `src/buying/.env` | 即PAT の認証情報、購入モード、金額上限、締切 | `env.example` をコピーして編集。**リポジトリに登録しない** |
 
-`config/config.yaml` の主な項目:
+`config.yaml` の主な項目:
 
 ```yaml
 pipeline:
-  model_filename: win/win_anaba.txt
+  model_filename: win/win_model.txt
   retrain_start_period: '202301'   # 1m が使えるのは2023年以降（§9 参照）
   retrain_delay_minutes: 30        # 最終レース発走から再学習を始めるまでの分数
 
@@ -142,7 +141,7 @@ strategy:
 
 | データ | 場所 | 用途 | 作り方 |
 | --- | --- | --- | --- |
-| 学習済みモデル | `data/model/win/win_anaba.txt`、`_calibrator.pkl`、`_simulator.json` | 当日の予測 | `python main.py --retrain-only`（下の2つが必要） |
+| 学習済みモデル | `data/model/win/win_model.txt`、`_calibrator.pkl`、`_simulator.json` | 当日の予測 | `python main.py --retrain-only`（下の2つが必要） |
 | 月別締切前オッズ | `data/processed/odds_series/YYYYMM_odds_series_tansho.csv` | 再学習の特徴量 | **本リポジトリ外**（`odds_series_scraper`） |
 | 着順 | `data/processed/horses/*_horses.csv` | 再学習のラベル | **本リポジトリ外** |
 
@@ -193,7 +192,8 @@ schtasks /Create /TN "KeibaAI Daily" /SC WEEKLY /D SAT,SUN /ST 08:30 `
 | `--model-filename PATH` | `data/model` 配下のモデルファイル名 |
 | `--include-past` | 起動が遅れて過ぎた取得時点を、JV-Link の時系列オッズから復元する |
 | `--headed` | 出馬表取得用ブラウザを表示する |
-| `--config` / `--env` | 設定ファイルの場所 |
+| `--config` | 設定ファイル（既定: `config.yaml`） |
+| `--env` | .env ファイル（既定: `src/buying/.env`） |
 
 **停止**: `Ctrl+C` でオッズ取得を止めると、処理中・判断待ちのレースの予測と購入を終えてから終了します。再学習は行いません。もう一度 `Ctrl+C` を押すと、購入の途中でも強制終了します。その場合は `python -m src.buying.cli reconcile` で成立状況を確認してください。
 
@@ -223,9 +223,10 @@ schtasks /Create /TN "KeibaAI Daily" /SC WEEKLY /D SAT,SUN /ST 08:30 `
 | `data/model/place/place_model_seed{0..4}.txt` ほか | 複勝モデル（5シード）・校正器（`.npz`）・メタ（`place_model_meta.json`） | 再学習（複勝） |
 | `data/processed/buying/buying_ledger.sqlite3` | 購入台帳（同じ買い目の二重購入を防ぐ） | 購入 |
 | `data/processed/buying/logs/YYYYMMDD_buying.jsonl` | 購入の監査ログ（安全審査で見送った理由を含む。認証情報はマスク） | 購入 |
-| `data/model/win/win_anaba.txt` ほか2ファイル | 学習済みモデル・確率校正器・運用パラメータ | 再学習 |
+| `data/model/win/win_model.txt` ほか2ファイル | 学習済みモデル・確率校正器・運用パラメータ | 再学習 |
 | `output/pipeline/YYYYMMDD_pipeline_report.json` | 日次レポート（レース数、レースごとの予測・購入結果、再学習結果、エラー） | main.py |
 | `logs/pipeline/YYYYMMDD_pipeline.log` | 日次の実行ログ（画面に出る内容と同じ） | main.py |
+| `logs/app.log` | `predict_today.py` / `retrain.py` / `place_model.py` / `model_creator.py` 等を**個別に直接実行**したときのログ（INFO以上）。約100KBで古い内容を削除して自動ローテーション（バックアップ無し）。`main.py` 実行時は使われない | 個別実行スクリプト |
 
 > レース予定は `YYYYMMDD_jra_today_schedule.csv` です。`YYYYMMDD_scheduler_events.csv` はレース予定ではなく、オッズ取得の実行記録です。
 
@@ -268,9 +269,7 @@ schtasks /Create /TN "KeibaAI Daily" /SC WEEKLY /D SAT,SUN /ST 08:30 `
 KeibaAI_Main/
 ├── main.py                      日次実行の入口（引数解析・ログ設定）
 ├── scripts/run_daily.bat        タスクスケジューラ用の起動バッチ
-├── config/
-│   ├── config.yaml              データ・モデル・賭け金・日次実行の設定
-│   └── features.json            特徴量定義（本システムでは空）
+├── config.yaml                  データ・モデル・賭け金・日次実行の設定
 ├── env.example                  src/buying/.env のひな型
 ├── requirement.txt              依存パッケージ
 ├── src/
@@ -303,11 +302,8 @@ KeibaAI_Main/
 │   │   ├── config.py            .env の読込と検証
 │   │   ├── audit.py / clock.py / domain.py / process_lock.py  監査ログ・時刻・型・多重起動防止
 │   │   └── cli.py               購入システム単体の CLI（doctor / paper / reconcile 等）
-│   ├── models/                  ── LightGBM 学習・予測・評価の共通ライブラリ
-│   │   ├── model_creator.py     学習・校正・予測・保存の窓口（simulator から利用）
-│   │   ├── trainer.py           LightGBM 学習・確率校正・保存の実装
-│   │   ├── evaluation.py        評価指標と Kelly 賭け金計算
-│   │   └── その他               本体パイプライン用（スタッキング、馬連・三連複、CV 等）。日次実行では import のみ
+│   ├── models/
+│   │   └── model_creator.py     単勝モデルの LightGBM 学習・確率校正・予測・保存・読込
 │   └── cli_common.py            設定ファイル読込などの共通処理
 ├── data/
 │   ├── processed/schedules/     当日のレース予定
@@ -315,9 +311,15 @@ KeibaAI_Main/
 │   ├── processed/odds_series/   学習用の月別締切前オッズ（外部で用意）
 │   ├── processed/horses/        着順（外部で用意）
 │   ├── processed/buying/        購入台帳・監査ログ
-│   └── model/win/               学習済みモデル
-├── output/                      予測結果・日次レポート
-├── logs/                        実行ログ
+│   └── model/
+│       ├── win/                 学習済み単勝モデル
+│       └── place/               学習済み複勝モデル（5シード + 校正器 + メタ）
+├── output/
+│   ├── simulator/               予測結果（単勝・複勝の全馬／推奨 CSV）
+│   └── pipeline/                日次レポート（YYYYMMDD_pipeline_report.json）
+├── logs/
+│   ├── app.log                  個別実行スクリプト（predict_today 等を直接実行した場合）のログ。100KBで自動ローテーション（バックアップ無し）
+│   └── pipeline/                main.py 実行時の日次ログ（YYYYMMDD_pipeline.log）
 ├── docs/                        仕様書・実装レポート・取得マニュアル
 └── tests/                       単体テスト
 ```
@@ -338,9 +340,9 @@ KeibaAI_Main/
 | 買う馬（全条件を満たすこと） | ① `EV = 予測確率 × 2mオッズ ≥ 1.05`<br>② `2mオッズ` が 10倍以上 150倍以下<br>③ `log(2mオッズ / 5mオッズ) ≤ -0.05`（オッズが約5%以上下がった）<br>④ レースの2m時点総投票額が **0.4億円以上**（当日データのスケール。上記 IMPORTANT 参照） |
 | 1レースの点数 | 条件を満たす馬が複数いる場合は**期待値が最も高い1頭のみ**。複数レースが条件を満たせば各レースで1頭ずつ買う |
 | 賭け金 | **Flat ベット（1点100円）**。Kelly は使わない |
-| 実際の上限 | `.env` の `BUYING_MAX_*` を超える買い目を含むレースは、**減額せずにレースごと見送る** |
+| 実際の上限 | `src/buying/.env` の `BUYING_MAX_*` を超える買い目を含むレースは、**減額せずにレースごと見送る** |
 
-購入条件は `config/config.yaml` の `strategy` セクションで変更できます（既定値は
+購入条件は `config.yaml` の `strategy` セクションで変更できます（既定値は
 `src/simulator/strategy.py`）。モデルの再学習とは独立に変えられます。
 
 - 確率は isotonic で校正済みで、予測値をそのまま勝率として読めます（実測で予測0.08%の馬は実際に0.07%、予測32.3%の馬は31.9%勝ちました）。`EV = 確率 × オッズ` はこの校正を前提にしており、校正器が無いと予測は停止します。
@@ -363,7 +365,7 @@ KeibaAI_Main/
 
 - 期待値は必ず複勝オッズの **min 側**で計算します（締切前は配当の幅しか確定しないため。保守側）。
 - 複勝オッズは、単勝の判断に使った時点と同じ時点（通常 2m）の値を使います。複勝オッズが無い馬は `place_odds_missing` で見送ります。
-- 購入条件は `config.yaml` の `place_strategy` で変更できます。
+- 購入条件は `config.yaml` の `place_strategy` セクションで変更できます。
 - 単勝と複勝の購入は1回のログインでまとめて行い、券種ごとに確認画面まで進めます。`BUYING_MAX_RACE_YEN` は同じレースの単勝・複勝の**合計**で判定します。
 - 複勝を買うには `.env` で `BUYING_ALLOWED_BET_TYPES` に `place` を含め、`BUYING_MAX_BETS_PER_RACE` を **3 以上**にしてください。1 のままだと複勝の推奨が2点以上のレースは減額せずレースごと見送られます（起動時に WARNING が出ます）。
 - **レポートの成績（回収率 140.43% CV / 144.54% 真のOOS、95%CI 下側 107〜113%）は1分前判断の数字です。** 本実装は単勝と同じ2分前判断で、この構成での成績は未検証です。
@@ -400,7 +402,7 @@ KeibaAI_Main/
 
 ## 9. 制約・注意点
 
-- **再学習に当日の結果は自動では入りません。** 学習データ（`data/processed/odds_series`、`data/processed/horses`）を更新する処理は本リポジトリに無いため、17時前後の自動再学習は、その時点で置かれている学習データで学習し直します。当日分を学習に含めるには、学習データを更新してから `python main.py --retrain-only` を実行してください。学習データの最終日が当日より前の場合は、その旨がログに WARNING で出ます。
+- **再学習に当日の結果は自動では入りません。** 学習データ（`data/processed/odds_series`、`data/processed/horses`）を更新する処理は本リポジトリに無いため、16:55 の自動再学習は、その時点で置かれている学習データで学習し直します。当日分を学習に含めるには、学習データを更新してから `python main.py --retrain-only` を実行してください。学習データの最終日が当日より前の場合は、その旨がログに WARNING で出ます。
 - **総投票額のスケールが学習と当日で違う（最重要）**: 学習データ（JV-Link 履歴 `0B41`）と当日データ（速報 `0B31`）で `hyosu_total` が **9〜13倍**違います（当日中央値0.40億円 / 履歴1m中央値5.73億円。**競馬場を揃えても倍率は変わらない**ので開催の質ではなくデータ区分の違いです）。オッズ自体は両方とも控除率21%前後で整合しており壊れていません。**総票数の絶対値だけ**がずれています。
   - 現在の既定は当日スケールの **0.4億円**（日内上位50%相当）です。**根拠は1開催日22レースのみで信頼性は低く**、開催を重ねたら必ず測り直してください。
   - 倍率は時点により一定でない（60m:8.3倍 / 1m:11.9倍）ため、**単純な定数倍での換算もできません**。
@@ -431,7 +433,7 @@ KeibaAI_Main/
 | 予測が `10m と 5m のオッズが1行も対応しませんでした` | `realtime_odds/YYYYMMDD/YYYYMMDD_scheduler_events.csv` の該当レースの `status`（`jvlink_unavailable` なら JV-Link の状態） |
 | 購入されない | `data/processed/buying/logs/YYYYMMDD_buying.jsonl` の `race_rejected` の `reasons`（`kill_switch`、`submit_deadline_expired`、`odds_stale`、`max_*` 等） |
 | 終了コード 2 | `python -m src.buying.cli reconcile` を実行し、即PAT の投票内容照会と照合 |
-| 再学習の失敗 | `data/processed/odds_series` と `data/processed/horses` の有無・期間、`config.yaml` の `retrain_start_period`。失敗しても既存モデルは残る |
+| 再学習の失敗 | `data/processed/odds_series` と `data/processed/horses` の有無・期間、`config.yaml` の `pipeline.retrain_start_period`。失敗しても既存モデルは残る |
 
 ---
 

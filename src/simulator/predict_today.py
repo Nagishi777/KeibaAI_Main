@@ -89,7 +89,7 @@ from src.simulator.realtime_loader import (
 )
 from src.simulator.strategy import (
     REASON_BET,
-    AnabaRule,
+    WinRule,
     apply_rule,
     rule_from_config,
 )
@@ -174,7 +174,7 @@ def predict_proba(
     Returns:
         Tuple[np.ndarray, SimulatorParams]: (校正済み予測確率, 運用パラメータ)
     """
-    creator = ModelCreator(config, config.get('features_def'))
+    creator = ModelCreator(config)
     model_path = resolve_model_path(creator.model_dir, model_filename)
     require_model(model_path)
     params = load_params(model_path)
@@ -341,7 +341,7 @@ def predict_from_snapshots(
     # [4][5] 購入条件の適用と Flat ベット
     rule, _cfg = rule_from_config(config)
     if min_ev is not None:
-        rule = AnabaRule(
+        rule = WinRule(
             min_ev=float(min_ev),
             odds_min=rule.odds_min,
             odds_max=rule.odds_max,
@@ -419,7 +419,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description='当日のオッズ・投票数で予測しベット推奨を出す'
     )
-    parser.add_argument('--config', type=str, default='config/config.yaml',
+    parser.add_argument('--config', type=str, default='config.yaml',
                         help='設定ファイルパス')
     parser.add_argument('--date', type=str, default=None,
                         help='対象日 (YYYY-MM-DD)。省略時は当日')

@@ -1,4 +1,4 @@
-"""穴馬戦略の購入判定ルールのテスト。"""
+"""単勝モデル戦略の購入判定ルールのテスト。"""
 import unittest
 
 import numpy as np
@@ -14,7 +14,7 @@ from src.simulator.strategy import (
     REASON_ODDS_LOW,
     REASON_POOL,
     REASON_SEP,
-    AnabaRule,
+    WinRule,
     apply_rule,
     rule_from_config,
 )
@@ -144,7 +144,7 @@ class PoolPercentileTest(unittest.TestCase):
     def test_percentile_mode_keeps_top_half(self) -> None:
         # 4レース・上位50% なので厚い2レース（分位点 0.75 / 1.00）だけ残る
         frame = self._frame_with_pools([1e8, 2e8, 3e8, 4e8])
-        rule = AnabaRule(min_pool_pctile=0.50)
+        rule = WinRule(min_pool_pctile=0.50)
         out = apply_rule(frame, np.array([0.10] * 4), rule)
         kept = set(out[out['skip_reason'] == REASON_BET]['race_id'])
         self.assertEqual(kept, {'2', '3'})
@@ -156,7 +156,7 @@ class PoolPercentileTest(unittest.TestCase):
             with self.subTest(pctile=pctile):
                 out = apply_rule(
                     self._frame_with_pools(pools), np.array([0.10] * 20),
-                    AnabaRule(min_pool_pctile=pctile),
+                    WinRule(min_pool_pctile=pctile),
                 )
                 self.assertEqual(
                     len(out[out['skip_reason'] == REASON_BET]), expected
@@ -164,7 +164,7 @@ class PoolPercentileTest(unittest.TestCase):
 
     def test_percentile_mode_ignores_absolute_scale(self) -> None:
         """全体を1/10にしても同じレースが残る（スケール非依存）。"""
-        rule = AnabaRule(min_pool_pctile=0.50)
+        rule = WinRule(min_pool_pctile=0.50)
         big = apply_rule(self._frame_with_pools([1e8, 2e8, 3e8, 4e8]),
                          np.array([0.10] * 4), rule)
         small = apply_rule(self._frame_with_pools([1e7, 2e7, 3e7, 4e7]),
@@ -174,7 +174,7 @@ class PoolPercentileTest(unittest.TestCase):
             set(small[small['skip_reason'] == REASON_BET]['race_id']),
         )
         # 絶対額モードなら小さい側は全滅する（対比）
-        abs_rule = AnabaRule(min_pool_yen=5e8)
+        abs_rule = WinRule(min_pool_yen=5e8)
         out = apply_rule(self._frame_with_pools([1e7, 2e7, 3e7, 4e7]),
                          np.array([0.10] * 4), abs_rule)
         self.assertEqual(len(out[out['skip_reason'] == REASON_BET]), 0)
@@ -183,14 +183,14 @@ class PoolPercentileTest(unittest.TestCase):
         """両方設定されていたら分位点が優先される。"""
         # 絶対額5億円なら全滅するが、分位点なら上位が残る
         frame = self._frame_with_pools([1e7, 2e7, 3e7, 4e7])
-        rule = AnabaRule(min_pool_yen=5e8, min_pool_pctile=0.50)
+        rule = WinRule(min_pool_yen=5e8, min_pool_pctile=0.50)
         out = apply_rule(frame, np.array([0.10] * 4), rule)
         self.assertEqual(len(out[out['skip_reason'] == REASON_BET]), 2)
 
     def test_rejected_races_get_pool_reason(self) -> None:
         frame = self._frame_with_pools([1e8, 4e8])
         out = apply_rule(frame, np.array([0.10, 0.10]),
-                         AnabaRule(min_pool_pctile=0.50))
+                         WinRule(min_pool_pctile=0.50))
         thin = out[out['race_id'] == '0']
         self.assertIn(REASON_POOL, _reasons(out, thin.index[0]))
 

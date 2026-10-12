@@ -5,7 +5,7 @@
 
     data/processed/realtime_odds/{YYYYMMDD}/{race_id}_tansho_realtimeodds.csv
 
-本モジュールは当日フォルダの単勝ファイルをすべて読み、穴馬戦略が必要とする
+本モジュールは当日フォルダの単勝ファイルをすべて読み、本戦略が必要とする
 時点（``60m / 30m / 10m / 5m`` と判断時点 ``2m``）を
 ``odds_{snap}_raw`` / ``pool_{snap}_raw`` というワイド表に整形する。
 整形後は :mod:`src.simulator.features` の同じ関数で特徴量を作るため、

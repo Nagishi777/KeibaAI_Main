@@ -9,7 +9,7 @@
         複勝 → output/simulator/YYYYMMDD_place_{all,bets}.csv
         購入 → src.buying の台帳・監査ログ（単勝・複勝をまとめて1回ログイン）
     [4] 全レース終了後（最終レース発走 + 待機時間）にモデルを再学習する
-        単勝 → data/model/win/win_anaba*.{txt,pkl,json}
+        単勝 → data/model/win/win_model*.{txt,pkl,json}
         複勝 → data/model/place/place_model_seed*.txt ほか
 
 単勝（``--win``）・複勝（``--place``）のどちらを動かすかは
@@ -55,7 +55,7 @@ from src.buying.service import PurchaseService
 from src.buying.snapshot_reader import SnapshotReader
 from src.buying.domain import BetType
 from src.buying.strategy import SimulatorStrategy, StrategyResult, combine_results
-from src.cli_common import load_config, load_features_config
+from src.cli_common import load_config
 from src.scraping.realtime_odds import (
     CSV_LOCK,
     get_today_schedule,
@@ -105,7 +105,7 @@ EXIT_INTERRUPTED = 130
 class PipelineOptions:
     """``main.py`` の引数に対応する実行オプション。"""
 
-    config_path: Path = Path('config/config.yaml')
+    config_path: Path = Path('config.yaml')
     env_path: Path = Path('src/buying/.env')
     model_filename: Optional[str] = None
     min_ev: Optional[float] = None
@@ -159,13 +159,11 @@ def today_jst() -> dt.date:
 
 
 def load_pipeline_config(config_path: Path) -> dict:
-    """``config.yaml`` と同じフォルダの ``features.json`` を読む（ロギングは変更しない）。"""
+    """``config.yaml`` を読む（ロギングは変更しない）。"""
     config_path = Path(config_path)
     if not config_path.exists():
         raise FileNotFoundError(f'設定ファイルが見つかりません: {config_path}')
-    config = load_config(config_path)
-    config['features_def'] = load_features_config(config_path.parent / 'features.json')
-    return config
+    return load_config(config_path)
 
 
 def setup_pipeline_logging(target_date: dt.date, log_dir: Path = DEFAULT_LOG_DIR) -> Path:

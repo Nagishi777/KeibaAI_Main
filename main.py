@@ -35,8 +35,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description='レース当日のオッズ取得・予測・購入・再学習を一括実行する',
     )
-    parser.add_argument('--config', type=Path, default=Path('config/config.yaml'),
-                        help='設定ファイル（既定: config/config.yaml）')
+    parser.add_argument('--config', type=Path, default=Path('config.yaml'),
+                        help='設定ファイル（既定: config.yaml）')
     parser.add_argument('--env', type=Path, default=Path('src/buying/.env'),
                         help='購入設定ファイル（既定: src/buying/.env）')
 
@@ -58,16 +58,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         '実行するモデル（どちらも指定しなければ両方を実行）'
     )
     models.add_argument('--win', action='store_true',
-                        help='単勝モデル（穴馬戦略）を実行する')
+                        help='単勝モデルを実行する')
     models.add_argument('--place', action='store_true',
-                        help='複勝モデル（穴馬戦略 複勝版）を実行する')
+                        help='複勝モデルを実行する')
 
     parser.add_argument('--retrain-start-period', default=None,
                         help='再学習の開始年月 YYYYMM（単勝・複勝共通。既定: config の pipeline.retrain_start_period / place_retrain_start_period）')
     parser.add_argument('--retrain-delay-minutes', type=float, default=None,
                         help='最終レース発走から再学習開始までの分数（既定: config の値、無ければ 30）')
     parser.add_argument('--model-filename', default=None,
-                        help='data/model 配下のモデルファイル名（既定: win/win_anaba.txt）')
+                        help='data/model 配下のモデルファイル名（既定: win/win_model.txt）')
     parser.add_argument('--min-ev', type=float, default=None,
                         help='単勝の EV しきい値（既定: config の strategy.min_ev）')
     parser.add_argument('--place-model-dir', default=None,

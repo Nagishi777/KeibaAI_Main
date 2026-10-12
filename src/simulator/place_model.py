@@ -1,4 +1,4 @@
-"""穴馬戦略 複勝版の予測モデル（5シード LightGBM + isotonic 校正）。
+"""複勝モデル戦略の予測モデル（5シード LightGBM + isotonic 校正）。
 
 検証内容は ``docs/report/anaba_strategy_place_report/anaba_place_band_report.md``。
 
@@ -402,8 +402,8 @@ def run_place_retrain(
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description='穴馬戦略 複勝版のモデルを学習する')
-    parser.add_argument('--config', type=str, default='config/config.yaml',
+    parser = argparse.ArgumentParser(description='複勝モデル戦略のモデルを学習する')
+    parser.add_argument('--config', type=str, default='config.yaml',
                         help='設定ファイルパス')
     parser.add_argument('--start-period', type=str, default=DEFAULT_START_PERIOD,
                         help=f'学習開始年月 (YYYYMM)。既定 {DEFAULT_START_PERIOD}（レポートの指定期間）')

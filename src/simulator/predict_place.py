@@ -238,7 +238,7 @@ def run_predict_place_today(
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='当日のオッズで複勝の推奨を出す')
-    parser.add_argument('--config', type=str, default='config/config.yaml')
+    parser.add_argument('--config', type=str, default='config.yaml')
     parser.add_argument('--date', type=str, default=None, help='対象日 (YYYY-MM-DD)。省略時は当日')
     parser.add_argument('--realtime-dir', type=str, default=str(DEFAULT_REALTIME_DIR))
     parser.add_argument('--model-dir', type=str, default=None,

@@ -1,4 +1,4 @@
-"""穴馬戦略 複勝版の購入判定ルール。
+"""複勝モデル戦略の購入判定ルール。
 
 検証内容は ``docs/report/anaba_strategy_place_report/anaba_place_band_report.md``。
 採用ルール（同レポート §4・§7.1 の ``bet_rule``）::

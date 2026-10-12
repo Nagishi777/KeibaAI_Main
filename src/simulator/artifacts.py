@@ -1,6 +1,6 @@
 """学習済みモデルと運用パラメータの保存・読込モジュール。
 
-``ModelCreator``（=``LightGBMTrainer``）は Booster と
+``ModelCreator`` は Booster と
 ``<stem>_calibrator.pkl`` を対で永続化する。本モジュールはそれに加えて、
 予測側がモデルの前提を検証するための情報を ``<stem>_simulator.json`` に
 保存する。
@@ -43,7 +43,7 @@ from src.simulator.features import (
 logger = logging.getLogger(__name__)
 
 # モデルファイル名（``data/model`` からの相対パス）
-DEFAULT_MODEL_FILENAME: str = 'win/win_anaba.txt'
+DEFAULT_MODEL_FILENAME: str = 'win/win_model.txt'
 
 # 運用パラメータの接尾辞（Booster と同じ stem に付ける）
 PARAMS_SUFFIX: str = '_simulator.json'

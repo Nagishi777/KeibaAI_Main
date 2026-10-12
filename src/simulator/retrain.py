@@ -1,4 +1,4 @@
-"""穴馬戦略のモデルを再学習する単独実行プログラム。
+"""単勝モデル戦略のモデルを再学習する単独実行プログラム。
 
 過去の締切前オッズ（60m/30m/10m/5m/1m）から22列の特徴量を作り、確定着順を
 ラベルにして LightGBM を学習し、isotonic 回帰で確率を校正する。
@@ -13,9 +13,9 @@
 出力:
 
 ==========================================================  ====================
-``data/model/win/win_anaba.txt``                      学習済み Booster
-``data/model/win/win_anaba_calibrator.pkl``           isotonic 校正器
-``data/model/win/win_anaba_simulator.json``           運用パラメータ
+``data/model/win/win_model.txt``                      学習済み Booster
+``data/model/win/win_model_calibrator.pkl``           isotonic 校正器
+``data/model/win/win_model_simulator.json``           運用パラメータ
 ==========================================================  ====================
 
 IMPORTANT (学習は 1m / 当日判断は 2m):
@@ -50,6 +50,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import roc_auc_score
 
 from src.models.model_creator import ModelCreator
 from src.simulator.artifacts import (
@@ -73,7 +74,7 @@ from src.simulator.features import (
     required_snapshots,
 )
 from src.simulator.odds_series_loader import load_odds_series
-from src.simulator.strategy import AnabaRule
+from src.simulator.strategy import WinRule
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +91,7 @@ MIN_RELIABLE_PERIOD: str = '202301'
 DEFAULT_HOLDOUT_MONTHS: int = 6
 
 # レポート §2.2 のハイパーパラメータ（29列・11フォールドで AUC 0.834〜0.852）
-ANABA_LGBM_PARAMS: Dict[str, object] = {
+WIN_LGBM_PARAMS: Dict[str, object] = {
     'objective': 'binary',
     'metric': 'auc',
     'boosting_type': 'gbdt',
@@ -265,7 +266,7 @@ def run_retrain(
     end_period: str,
     holdout_months: int = DEFAULT_HOLDOUT_MONTHS,
     model_filename: str = DEFAULT_MODEL_FILENAME,
-    use_anaba_params: bool = True,
+    use_tuned_params: bool = True,
 ) -> RetrainResult:
     """再学習を実行し、モデル・キャリブレータ・運用パラメータを保存する。
 
@@ -275,7 +276,7 @@ def run_retrain(
         end_period: 学習終了年月 (YYYYMM)
         holdout_months: 学習期間末尾から切り出す holdout の月数
         model_filename: ``data/model`` 配下の保存ファイル名
-        use_anaba_params: True ならレポート §2.2 のハイパーパラメータを使う
+        use_tuned_params: True ならレポート §2.2 のハイパーパラメータを使う
 
     Returns:
         RetrainResult: 学習結果のサマリ
@@ -285,7 +286,7 @@ def run_retrain(
     # レース総投票額の分布をログに残す（購入条件の5億円がどこに来るかの確認）
     pool_by_race = race_pool(work)
     quantiles = describe_pool_quantiles(pool_by_race)
-    rule = AnabaRule()
+    rule = WinRule()
     logger.warning(
         '学習期間のレース総投票額（%s時点）の分位点:', TRAIN_DECISION_SNAPSHOT
     )
@@ -299,14 +300,14 @@ def run_retrain(
 
     fit_df, holdout_df, split_date = split_fit_holdout(work, holdout_months)
 
-    creator = ModelCreator(config, config.get('features_def'))
-    if use_anaba_params:
-        creator.update_lgbm_params('lightgbm', ANABA_LGBM_PARAMS)
+    creator = ModelCreator(config)
+    if use_tuned_params:
+        creator.update_lgbm_params(WIN_LGBM_PARAMS)
         logger.warning(
             'レポート §2.2 のハイパーパラメータで学習します'
             '（num_leaves=%s / max_depth=%s / min_data_in_leaf=%s / lambda_l2=%s）',
-            ANABA_LGBM_PARAMS['num_leaves'], ANABA_LGBM_PARAMS['max_depth'],
-            ANABA_LGBM_PARAMS['min_data_in_leaf'], ANABA_LGBM_PARAMS['lambda_l2'],
+            WIN_LGBM_PARAMS['num_leaves'], WIN_LGBM_PARAMS['max_depth'],
+            WIN_LGBM_PARAMS['min_data_in_leaf'], WIN_LGBM_PARAMS['lambda_l2'],
         )
 
     X_fit, y_fit = feature_frame(fit_df), fit_df[TARGET_COL]
@@ -321,15 +322,13 @@ def run_retrain(
     # キャリブレータは holdout（木の学習に使っていない期間）で fit する
     cal_cfg = config.get('model', {}).get('calibration', {})
     creator.calibrate_model(
-        BET_TYPE, X_hold, y_hold,
-        method=cal_cfg.get('method', 'isotonic'),
-        min_samples_per_bin=int(cal_cfg.get('min_samples_per_bin', 0)),
-        min_pos_per_bin=int(cal_cfg.get('min_pos_per_bin', 0)),
+        BET_TYPE, X_hold, y_hold, method=cal_cfg.get('method', 'isotonic'),
     )
 
     hold_proba = creator.predict(X_hold, model_name=BET_TYPE)
-    hold_metrics = creator.evaluate_model(y_hold, hold_proba, threshold=0.5)
-    holdout_auc = float(hold_metrics.get('auc', float('nan')))
+    holdout_auc = (
+        float(roc_auc_score(y_hold, hold_proba)) if y_hold.nunique() > 1 else float('nan')
+    )
 
     booster = creator.models[BET_TYPE]
     num_trees = int(booster.best_iteration or booster.num_trees())
@@ -394,9 +393,9 @@ def _parse_args() -> argparse.Namespace:
         argparse.Namespace: 解析済み引数
     """
     parser = argparse.ArgumentParser(
-        description='穴馬戦略のモデルを再学習する'
+        description='単勝モデル戦略のモデルを再学習する'
     )
-    parser.add_argument('--config', type=str, default='config/config.yaml',
+    parser.add_argument('--config', type=str, default='config.yaml',
                         help='設定ファイルパス')
     parser.add_argument('--start-period', type=str, required=True,
                         help=f'学習開始年月 (YYYYMM)。{MIN_RELIABLE_PERIOD} 以降を推奨')
@@ -408,7 +407,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument('--model-filename', type=str,
                         default=DEFAULT_MODEL_FILENAME,
                         help='data/model 配下の保存ファイル名')
-    parser.add_argument('--no-anaba-params', action='store_true',
+    parser.add_argument('--no-tuned-params', action='store_true',
                         help='レポートのHPで上書きせず config の設定を使う')
     return parser.parse_args()
 
@@ -429,7 +428,7 @@ def main() -> None:
         end_period=args.end_period,
         holdout_months=args.holdout_months,
         model_filename=args.model_filename,
-        use_anaba_params=not args.no_anaba_params,
+        use_tuned_params=not args.no_tuned_params,
     )
 
     print()

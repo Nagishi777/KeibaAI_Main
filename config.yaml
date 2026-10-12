@@ -11,17 +11,15 @@ data:
   output_dir: output
 
 model:
-  # 学習済みモデルの保存先（data/model/win/win_anaba.txt 等）
+  # 学習済みモデルの保存先（data/model/win/win_model.txt 等）
   model_dir: data/model
-  # 木の形は src/simulator/retrain.py の ANABA_LGBM_PARAMS で上書きされる。
+  # 木の形は src/simulator/retrain.py の WIN_LGBM_PARAMS で上書きされる。
   # ここでは木の本数の上限と early stopping だけを指定する。
   lightgbm:
     n_estimators: 1000
     early_stopping_rounds: 50
   calibration:
     method: isotonic
-    min_samples_per_bin: 0
-    min_pos_per_bin: 0
   # 直近のレースほど重く学習する時間減衰ウェイト
   time_decay:
     recent_years: 2.0
@@ -29,7 +27,7 @@ model:
     w_recent: 3.0
     w_mid: 2.0
 
-# 穴馬戦略の購入条件（docs/report/anaba_strategy_report/anaba_strategy_report.md）
+# 単勝モデル戦略の購入条件（docs/report/anaba_strategy_report/anaba_strategy_report.md）
 # 既定値は src/simulator/strategy.py が持つ。ここに書けば上書きできる。
 strategy:
   min_ev: 1.05               # EV = 予測確率 × 2mオッズ の下限
@@ -58,7 +56,7 @@ strategy:
   max_bets_per_race: 1       # 1レースあたりの購入点数（期待値最大の1頭のみ）
   stake_yen: 100             # Flat ベットの1点あたり金額（円）
 
-# 穴馬戦略 複勝版の購入条件
+# 複勝モデル戦略の購入条件
 # （docs/report/anaba_strategy_place_report/anaba_place_band_report.md §4・§7.1）
 # 既定値は src/simulator/place_strategy.py が持つ。ここに書けば上書きできる。
 place_strategy:
@@ -71,7 +69,7 @@ place_strategy:
 
 # main.py の日次実行
 pipeline:
-  model_filename: win/win_anaba.txt
+  model_filename: win/win_model.txt
   retrain_start_period: '202301'   # 再学習に使う最初の年月（1m が使えるのは2023年以降）
   place_model_dir: place           # 複勝モデルの保存先（data/model 配下）
   place_retrain_start_period: '202401'   # 複勝モデルの学習開始年月（レポートの指定期間）
