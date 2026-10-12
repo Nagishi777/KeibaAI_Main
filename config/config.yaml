@@ -58,10 +58,23 @@ strategy:
   max_bets_per_race: 1       # 1レースあたりの購入点数（期待値最大の1頭のみ）
   stake_yen: 100             # Flat ベットの1点あたり金額（円）
 
+# 穴馬戦略 複勝版の購入条件
+# （docs/report/anaba_strategy_place_report/anaba_place_band_report.md §4・§7.1）
+# 既定値は src/simulator/place_strategy.py が持つ。ここに書けば上書きできる。
+place_strategy:
+  min_ev: 1.05               # 複勝EV = 予測複勝率 × 判断時点の複勝オッズ(min側) の下限
+  odds_min: 2.0              # 複勝オッズ(min側)の下限
+  odds_max: 20.0             # 複勝オッズ(min側)の上限（20倍超は回収率が崩れる。レポート §3.2）
+  max_drift: -0.05           # 単勝の log(判断時点オッズ / 5mオッズ) の上限（単勝版と同じ）
+  max_bets_per_race: 3       # 1レース最大3点（期待値の高い順）。.env の BUYING_MAX_BETS_PER_RACE も合わせること
+  stake_yen: 100             # Flat ベットの1点あたり金額（円）
+
 # main.py の日次実行
 pipeline:
   model_filename: win/win_anaba.txt
   retrain_start_period: '202301'   # 再学習に使う最初の年月（1m が使えるのは2023年以降）
+  place_model_dir: place           # 複勝モデルの保存先（data/model 配下）
+  place_retrain_start_period: '202401'   # 複勝モデルの学習開始年月（レポートの指定期間）
   retrain_delay_minutes: 30        # 最終レース発走から再学習を始めるまでの分数
 
 # 単独実行（python -m src.simulator.*）時のログ

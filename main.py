@@ -5,9 +5,14 @@
     [3] 各レースの 2m 前のオッズが揃ったら予測 → 購入ロジックに従って馬券を購入
     [4] 全レース終了後（最終レース発走 + 30分）にモデルを再学習
 
+単勝モデル・複勝モデルの両方を既定で動かす。``--win`` / ``--place`` を付けると
+指定した券種だけを動かす（両方付けた場合は両方）。
+
 使い方::
 
-    python main.py                  # src/buying/.env の BUYING_MODE に従って購入
+    python main.py                  # 単勝・複勝の両方。src/buying/.env の BUYING_MODE に従って購入
+    python main.py --win            # 単勝モデルだけ
+    python main.py --place          # 複勝モデルだけ
     python main.py --paper          # ブラウザを開かず購入計画の検証だけ行う
     python main.py --no-buy         # 予測まで（購入処理は呼ばない）
     python main.py --live           # BUYING_MODE=live のときの実購入（明示が必須）
@@ -49,19 +54,35 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     retrain.add_argument('--retrain-only', action='store_true',
                          help='取得・予測・購入を行わず、再学習だけをすぐに実行する')
 
+    models = parser.add_argument_group(
+        '実行するモデル（どちらも指定しなければ両方を実行）'
+    )
+    models.add_argument('--win', action='store_true',
+                        help='単勝モデル（穴馬戦略）を実行する')
+    models.add_argument('--place', action='store_true',
+                        help='複勝モデル（穴馬戦略 複勝版）を実行する')
+
     parser.add_argument('--retrain-start-period', default=None,
-                        help='再学習の開始年月 YYYYMM（既定: config の pipeline.retrain_start_period）')
+                        help='再学習の開始年月 YYYYMM（単勝・複勝共通。既定: config の pipeline.retrain_start_period / place_retrain_start_period）')
     parser.add_argument('--retrain-delay-minutes', type=float, default=None,
                         help='最終レース発走から再学習開始までの分数（既定: config の値、無ければ 30）')
     parser.add_argument('--model-filename', default=None,
                         help='data/model 配下のモデルファイル名（既定: win/win_anaba.txt）')
     parser.add_argument('--min-ev', type=float, default=None,
-                        help='EV しきい値（既定: モデルの運用パラメータ）')
+                        help='単勝の EV しきい値（既定: config の strategy.min_ev）')
+    parser.add_argument('--place-model-dir', default=None,
+                        help='data/model 配下の複勝モデルフォルダ（既定: place）')
+    parser.add_argument('--place-min-ev', type=float, default=None,
+                        help='複勝の EV しきい値（既定: config の place_strategy.min_ev）')
     parser.add_argument('--include-past', action='store_true',
                         help='起動が遅れて過ぎた取得時点を JV-Link の時系列オッズから復元する')
     parser.add_argument('--headed', action='store_true',
                         help='出馬表取得用ブラウザを表示する')
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    # どちらも指定しなければ両方を動かす
+    if not (args.win or args.place):
+        args.win = args.place = True
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -84,13 +105,21 @@ def main(argv: list[str] | None = None) -> int:
     target_date = today_jst()
     log_path = setup_pipeline_logging(target_date)
     logger = logging.getLogger('main')
-    logger.warning('KeibaAI 日次実行を開始します: %s（ログ: %s）', target_date, log_path)
+    logger.warning(
+        'KeibaAI 日次実行を開始します: %s（券種: %s / ログ: %s）', target_date,
+        ' + '.join(name for name, on in (('単勝', args.win), ('複勝', args.place)) if on),
+        log_path,
+    )
 
     options = PipelineOptions(
         config_path=args.config,
         env_path=args.env,
         model_filename=args.model_filename,
         min_ev=args.min_ev,
+        run_win=args.win,
+        run_place=args.place,
+        place_model_dir=args.place_model_dir,
+        place_min_ev=args.place_min_ev,
         buy=not args.no_buy,
         paper=args.paper,
         live=args.live,

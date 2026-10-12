@@ -24,7 +24,7 @@ IMPORTANT (欠損を補完しない):
 import datetime as dt
 import logging
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 import pandas as pd
 
@@ -38,14 +38,26 @@ DEFAULT_REALTIME_DIR = Path('data/processed/realtime_odds')
 # CSV は BOM 付き UTF-8 で保存される
 _ENCODING = 'utf-8-sig'
 
-# 読み込む券種（単勝のみ）
+# 特徴量に使う券種（単勝）
 BET_TYPE = 'tansho'
+
+# 複勝モデルが賭け判断オッズとして読む券種
+PLACE_BET_TYPE = 'fukusho'
 
 # レース別 CSV のファイル名接尾辞（realtime_odds.race_odds_path と同じ規則）
 _FILE_SUFFIX = f'_{BET_TYPE}_realtimeodds.csv'
 
+
+def _file_suffix(bet_type: str) -> str:
+    """券種別のレース別 CSV の接尾辞を返す。"""
+    return f'_{bet_type}_realtimeodds.csv'
+
+
 # CSV 側の列名 → 整形後の列名
 _VALUE_COLS = {'odds_win': 'odds', 'hyosu_total': 'pool'}
+
+# 複勝 CSV 側の列名 → 整形後の列名（min/max は締切前の配当幅）
+_PLACE_VALUE_COLS = {'odds_place_min': 'odds_place_min', 'odds_place_max': 'odds_place_max'}
 
 # 判断時点が欠けていたときに代用を許す時点（発走に近い順）。
 # 2m が取れていないレースを黙って捨てないための代替であり、
@@ -70,40 +82,47 @@ def race_files(
     realtime_dir: Path,
     target_date: dt.date,
     race_ids: Optional[Iterable[str]] = None,
+    *,
+    bet_type: str = BET_TYPE,
 ) -> List[Path]:
-    """対象日の単勝レース別 CSV を列挙する。
+    """対象日のレース別 CSV を列挙する。
 
     Args:
         realtime_dir: ``data/processed/realtime_odds`` のパス
         target_date: 対象日
         race_ids: 指定したレースのファイルだけに絞る（省略時は全レース）
+        bet_type: 券種（既定は単勝 ``tansho``。複勝は ``fukusho``）
 
     Returns:
-        List[Path]: ``{race_id}_tansho_realtimeodds.csv`` のパス（名前順）
+        List[Path]: ``{race_id}_{bet_type}_realtimeodds.csv`` のパス（名前順）
 
     Raises:
         FileNotFoundError: 対象のファイルが1件も無い場合
     """
     folder = date_dir(realtime_dir, target_date)
+    suffix = _file_suffix(bet_type)
     if race_ids is None:
-        paths = sorted(folder.glob(f'*{_FILE_SUFFIX}'))
+        paths = sorted(folder.glob(f'*{suffix}'))
     else:
-        candidates = (folder / f'{race_id}{_FILE_SUFFIX}' for race_id in set(race_ids))
+        candidates = (folder / f'{race_id}{suffix}' for race_id in set(race_ids))
         paths = sorted(path for path in candidates if path.exists())
     if not paths:
         raise FileNotFoundError(
-            f'当日のオッズ CSV が見つかりません: {folder}/*{_FILE_SUFFIX}。'
+            f'当日のオッズ CSV が見つかりません: {folder}/*{suffix}。'
             ' 先に python -m src.scraping.realtime_odds を'
             ' 実行して当日のオッズを取得してください。'
         )
     return paths
 
 
-def _read_race_files(paths: List[Path]) -> pd.DataFrame:
+def _read_race_files(
+    paths: List[Path], value_cols: Optional[Dict[str, str]] = None
+) -> pd.DataFrame:
     """レース別 CSV をすべて読み、1つの縦長表にまとめる。
 
     Args:
         paths: :func:`race_files` の戻り値
+        value_cols: 必須の値列（省略時は単勝の列）
 
     Returns:
         pd.DataFrame: 全レース・全時点の行
@@ -111,7 +130,7 @@ def _read_race_files(paths: List[Path]) -> pd.DataFrame:
     Raises:
         ValueError: 必要な列が欠けている場合
     """
-    need = ['race_id', 'umaban', 'snapshot_label'] + list(_VALUE_COLS)
+    need = ['race_id', 'umaban', 'snapshot_label'] + list(value_cols or _VALUE_COLS)
     frames = []
     for path in paths:
         df = pd.read_csv(
@@ -126,7 +145,12 @@ def _read_race_files(paths: List[Path]) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True, sort=False)
 
 
-def _read_snapshot(rows: pd.DataFrame, label: str, out_label: str) -> pd.DataFrame:
+def _read_snapshot(
+    rows: pd.DataFrame,
+    label: str,
+    out_label: str,
+    value_cols: Optional[Dict[str, str]] = None,
+) -> pd.DataFrame:
     """縦長表から1時点分を取り出し、馬単位の最新行だけを残す。
 
     同一 ``(race_id, umaban)`` が複数回保存されている場合
@@ -136,6 +160,7 @@ def _read_snapshot(rows: pd.DataFrame, label: str, out_label: str) -> pd.DataFra
         rows: :func:`_read_race_files` の戻り値
         label: CSV 上の時点ラベル
         out_label: 出力列名に使う時点ラベル（代用時は元の時点と異なる）
+        value_cols: CSV 列名 → 出力列名の接頭辞（省略時は単勝の列）
 
     Returns:
         pd.DataFrame: [race_id, horse_number, odds_{out_label}_raw,
@@ -169,10 +194,10 @@ def _read_snapshot(rows: pd.DataFrame, label: str, out_label: str) -> pd.DataFra
         'race_id': df['race_id'].astype(str),
         'horse_number': horse_number.astype('int64'),
     })
-    for src_col, prefix in _VALUE_COLS.items():
+    for src_col, prefix in (value_cols or _VALUE_COLS).items():
         value = pd.to_numeric(df[src_col], errors='coerce')
         # オッズは正の倍率、票数合計は非負のみ有効。範囲外は NaN（補完しない）。
-        bound = value > 0 if prefix == 'odds' else value >= 0
+        bound = value > 0 if prefix.startswith('odds') else value >= 0
         out[f'{prefix}_{out_label}_raw'] = value.where(bound).astype('float64')
 
     logger.info(
@@ -305,3 +330,65 @@ def available_dates(realtime_dir: Path = DEFAULT_REALTIME_DIR) -> List[dt.date]:
         except ValueError:
             continue
     return sorted(dates, reverse=True)
+
+
+def load_today_place_odds(
+    target_date: dt.date,
+    realtime_dir: Path,
+    snapshot_by_race: Dict[str, str],
+) -> pd.DataFrame:
+    """当日の複勝オッズ（min/max）を、レースごとに指定された時点で読む。
+
+    複勝モデルの賭け判断オッズは、単勝の特徴量と**同じ時点**でなければならない
+    （2m が欠けて 3m で代用したレースは複勝も 3m を読む）。よって時点は
+    単勝側の ``decision_snapshot_used`` をレースごとに受け取る。
+
+    Args:
+        target_date: 対象日
+        realtime_dir: ``data/processed/realtime_odds`` のパス
+        snapshot_by_race: race_id → 読む時点ラベル
+
+    Returns:
+        pd.DataFrame: [race_id, horse_number, odds_place_min_late,
+        odds_place_max_late]。複勝 CSV が無いレース・時点は行が無い
+        （呼び出し側で欠損として扱う。補完しない）
+
+    Raises:
+        FileNotFoundError: 対象レースの複勝 CSV が1件も無い場合
+    """
+    from src.simulator.features import LATE
+
+    cols = ['race_id', 'horse_number'] + [
+        f'{prefix}_{LATE}' for prefix in _PLACE_VALUE_COLS.values()
+    ]
+    paths = race_files(
+        realtime_dir, target_date, list(snapshot_by_race), bet_type=PLACE_BET_TYPE
+    )
+    rows = _read_race_files(paths, _PLACE_VALUE_COLS)
+    rows['race_id'] = rows['race_id'].astype(str)
+
+    frames: List[pd.DataFrame] = []
+    by_label: Dict[str, List[str]] = {}
+    for race_id, label in snapshot_by_race.items():
+        by_label.setdefault(label, []).append(str(race_id))
+    for label, ids in sorted(by_label.items()):
+        subset = rows[rows['race_id'].isin(ids)]
+        if not len(subset) or label not in set(subset['snapshot_label']):
+            logger.warning(
+                '複勝 %s 時点が無いレースがあります: %s', label, ','.join(sorted(ids))
+            )
+            continue
+        snap = _read_snapshot(subset, label, LATE, _PLACE_VALUE_COLS)
+        snap = snap.rename(columns={
+            f'{prefix}_{LATE}_raw': f'{prefix}_{LATE}'
+            for prefix in _PLACE_VALUE_COLS.values()
+        })
+        frames.append(snap[cols])
+    if not frames:
+        return pd.DataFrame(columns=cols)
+    out = pd.concat(frames, ignore_index=True)
+    logger.info(
+        '当日複勝オッズ読込: %s 行 / %s レース',
+        f'{len(out):,}', f'{out["race_id"].nunique():,}',
+    )
+    return out

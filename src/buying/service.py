@@ -57,13 +57,14 @@ class PurchaseService:
             mode=self.settings.mode.value,
             intents=len(strategy.intents),
         )
-        grouped: dict[str, list] = defaultdict(list)
+        # 単勝と複勝は即PATの画面操作が別なので (レース, 券種) ごとに扱う
+        grouped: dict[tuple[str, str], list] = defaultdict(list)
         for intent in strategy.intents:
-            grouped[intent.race_id].append(intent)
-        report.planned_races = len(grouped)
+            grouped[(intent.race_id, intent.bet_type.value)].append(intent)
+        report.planned_races = len({race_id for race_id, _ in grouped})
         ledger_alias = f"{self.settings.account_alias}:{self.settings.mode.value}"
-        pending: dict[str, list] = {}
-        for race_id, intents in grouped.items():
+        pending: dict[tuple[str, str], list] = {}
+        for group_key, intents in grouped.items():
             existing = [
                 self.ledger.find_natural(ledger_alias, item, strategy.decision_run_id)
                 for item in intents
@@ -71,7 +72,7 @@ class PurchaseService:
             if any(item is not None for item in existing):
                 report.skipped_existing += len(intents)
             else:
-                pending[race_id] = intents
+                pending[group_key] = intents
         grouped = pending
         self.audit.write(
             "run_started",
@@ -85,6 +86,8 @@ class PurchaseService:
         browser: IpatClient | None = None
         balance: int | None = None
         session_committed = 0
+        # このセッション内でレースごとに確定（または予約）した金額。1レース上限は券種をまたいで数える
+        race_committed: dict[str, int] = defaultdict(int)
         try:
             if self.settings.mode != BuyingMode.PAPER and not self.settings.kill_switch and grouped:
                 if self.settings.credentials is None:
@@ -105,7 +108,7 @@ class PurchaseService:
                     # 残高上限の審査は行われない。1日上限・レース上限・台帳は有効。
                     self.audit.write("balance_unavailable", run_id=report.run_id)
 
-            for race_id, raw_intents in sorted(grouped.items()):
+            for (race_id, bet_type), raw_intents in sorted(grouped.items()):
                 intents = tuple(raw_intents)
                 race = races.get(race_id)
                 if race is None:
@@ -121,17 +124,19 @@ class PurchaseService:
                     account_balance_yen=balance,
                     committed_day_yen=committed_day,
                     committed_session_yen=session_committed,
+                    committed_race_yen=race_committed[race_id],
                 )
                 if not decision.accepted:
                     report.rejected += len(intents)
                     self.audit.write(
-                        "race_rejected", race_id=race_id, reasons=list(decision.reasons)
+                        "race_rejected", race_id=race_id, bet_type=bet_type,
+                        reasons=list(decision.reasons),
                     )
                     continue
                 entries, all_new = self._reserve_all(intents, strategy, target_date)
                 if not all_new:
                     report.skipped_existing += len(intents)
-                    self.audit.write("race_skipped_existing", race_id=race_id)
+                    self.audit.write("race_skipped_existing", race_id=race_id, bet_type=bet_type)
                     continue
                 for entry in entries:
                     self.ledger.transition(entry.idempotency_key, PurchaseState.VALIDATED)
@@ -140,12 +145,16 @@ class PurchaseService:
                     for entry in entries:
                         self.ledger.transition(entry.idempotency_key, PurchaseState.DRY_RUN)
                     report.dry_run += len(intents)
-                    self.audit.write("paper_validated", race_id=race_id, total_yen=sum(i.amount_yen for i in intents))
+                    race_committed[race_id] += sum(i.amount_yen for i in intents)
+                    self.audit.write(
+                        "paper_validated", race_id=race_id, bet_type=bet_type,
+                        total_yen=sum(i.amount_yen for i in intents),
+                    )
                     continue
 
                 assert browser is not None
                 try:
-                    prepared = browser.prepare_win_bets(race, intents)
+                    prepared = browser.prepare_bets(race, intents)
                     expected_total = sum(intent.amount_yen for intent in intents)
                     if prepared.displayed_total_yen != expected_total:
                         raise ValueError(
@@ -157,7 +166,11 @@ class PurchaseService:
                         for entry in entries:
                             self.ledger.transition(entry.idempotency_key, PurchaseState.DRY_RUN)
                         report.dry_run += len(intents)
-                        self.audit.write("dry_run_completed", race_id=race_id, total_yen=expected_total)
+                        race_committed[race_id] += expected_total
+                        self.audit.write(
+                            "dry_run_completed", race_id=race_id, bet_type=bet_type,
+                            total_yen=expected_total,
+                        )
                         continue
 
                     for entry in entries:
@@ -173,11 +186,13 @@ class PurchaseService:
                             )
                         report.accepted += len(intents)
                         session_committed += expected_total
+                        race_committed[race_id] += expected_total
                         if balance is not None:
                             balance -= expected_total
                         self.audit.write(
                             "purchase_accepted",
                             race_id=race_id,
+                            bet_type=bet_type,
                             total_yen=expected_total,
                             receipt_number=receipt.receipt_number,
                         )
@@ -201,8 +216,8 @@ class PurchaseService:
                                     error=str(exc),
                                 )
                         report.rejected += len(intents)
-                    report.errors.append(f"{race_id}: {exc}")
-                    self.audit.write("race_error", race_id=race_id, error=str(exc))
+                    report.errors.append(f"{race_id} {bet_type}: {exc}")
+                    self.audit.write("race_error", race_id=race_id, bet_type=bet_type, error=str(exc))
                     if self.settings.mode == BuyingMode.LIVE:
                         break
         finally:

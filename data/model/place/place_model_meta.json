@@ -1,0 +1,55 @@
+{
+  "feature_cols": [
+    "log_odds_late",
+    "log_odds_5m",
+    "mkt_late",
+    "mkt_rank_late",
+    "drift_5_late",
+    "drift_10_5",
+    "drift_30_10",
+    "drift_60_30",
+    "drift_60_late",
+    "accel",
+    "drift_5_late_rel",
+    "drift_10_5_rel",
+    "inc_share_5_late",
+    "inc_vs_mkt",
+    "inc_ratio",
+    "log_pool_late",
+    "pool_growth_5_late",
+    "log_pool_per_horse",
+    "hhi_late",
+    "fav_strength",
+    "mkt_ratio_to_fav",
+    "field_size"
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "train_decision_snapshot": "1m",
+  "label": "placed (<=7頭: 2着まで / >=8頭: 3着まで)",
+  "train_start": "2024-01-06",
+  "train_end": "2026-07-26",
+  "holdout_start": "2026-01-31",
+  "n_train_rows": 115074,
+  "n_train_races": 8340,
+  "place_rate": 0.2156438465682952,
+  "holdout_auc": [
+    0.8269011289216106,
+    0.8268688661150545,
+    0.826927074653707,
+    0.8268647281207929,
+    0.8268845882351348
+  ],
+  "num_trees": [
+    210,
+    168,
+    188,
+    182,
+    215
+  ]
+}

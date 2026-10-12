@@ -17,6 +17,7 @@ from typing import Any, Iterable
 from src.buying.clock import JST
 from src.buying.domain import (
     BetIntent,
+    BetType,
     Credentials,
     PreparedPurchase,
     PurchaseReceipt,
@@ -251,8 +252,16 @@ class PlaywrightIpatClient:
     def prepare_win_bets(
         self, race: RaceInfo, intents: tuple[BetIntent, ...]
     ) -> PreparedPurchase:
+        """旧名。:meth:`prepare_bets` を使うこと。"""
+        return self.prepare_bets(race, intents)
+
+    def prepare_bets(
+        self, race: RaceInfo, intents: tuple[BetIntent, ...]
+    ) -> PreparedPurchase:
+        """単勝または複勝の購入を確認画面まで進める（1回の呼び出しは1券種）。"""
         if not intents:
             raise BrowserContractError("空の購入指示は入力できません")
+        bet_label = _bet_type_label(intents)
         venue = VENUE_NAMES.get(race.venue_code)
         if venue is None:
             raise BrowserContractError(f"未対応の競馬場コードです: {race.venue_code}")
@@ -263,7 +272,7 @@ class PlaywrightIpatClient:
         self._dump_stage("bet3_race_list")
         self._click_text((f"{race.race_number}R", str(race.race_number)))
         self._dump_stage("bet4_bet_type")
-        self._click_text(("単勝",))
+        self._click_text((bet_label,))
         self._dump_stage("bet5_horse_select")
 
         for intent in intents:
@@ -332,7 +341,7 @@ class PlaywrightIpatClient:
         total_yen: int,
     ) -> None:
         compact = re.sub(r"\s+", "", text)
-        required = ["単勝", str(total_yen), f"{race.race_number}R"]
+        required = [_bet_type_label(intents), str(total_yen), f"{race.race_number}R"]
         required.extend(str(intent.selection[0]) for intent in intents)
         missing = [value for value in required if value not in compact]
         if missing:
@@ -428,3 +437,18 @@ class PlaywrightIpatClient:
             except Exception:
                 pass
         self._page = self._context = self._browser = self._playwright = None
+
+
+# 即PATの券種ボタン・確認画面に表示される券種名
+BET_TYPE_LABELS = {BetType.WIN: "単勝", BetType.PLACE: "複勝"}
+
+
+def _bet_type_label(intents: tuple[BetIntent, ...]) -> str:
+    kinds = {intent.bet_type for intent in intents}
+    if len(kinds) != 1:
+        raise BrowserContractError(f"1回の入力で扱える券種は1つです: {sorted(k.value for k in kinds)}")
+    kind = next(iter(kinds))
+    label = BET_TYPE_LABELS.get(kind)
+    if label is None:
+        raise BrowserContractError(f"未対応の券種です: {kind.value}")
+    return label

@@ -4,11 +4,16 @@ JRA のレース当日に、次の4つを1本のプログラム（`main.py`）�
 
 1. 当日の発走時刻を取得する
 2. 発走時刻に合わせて JRA-VAN（JV-Link）から単勝・複勝・枠連のオッズと票数を取得する
-3. 各レースの発走**2分前**のオッズで勝率を予測し、購入ルールに従って即PATで馬券を買う
+3. 各レースの発走**2分前**のオッズで勝率・複勝率を予測し、購入ルールに従って即PATで馬券を買う
 4. 全レース終了後にモデルを再学習する
 
-採用している戦略は「穴馬戦略」（締切直前の資金流入 × 高オッズ）です。
-検証内容は `docs/report/anaba_strategy_report/anaba_strategy_report.md` にあります。
+採用している戦略は「穴馬戦略」（締切直前の資金流入 × 高オッズ）で、**単勝モデル**と
+**複勝モデル**の2つがあります。`main.py` は既定で両方を動かし、`--win` / `--place` で片方だけにできます。
+
+| モデル | 検証レポート |
+| --- | --- |
+| 単勝 | `docs/report/anaba_strategy_report/anaba_strategy_report.md` |
+| 複勝 | `docs/report/anaba_strategy_place_report/anaba_place_band_report.md`（購入帯・最終モデル）/ `anaba_place_strategy_report.md`（単勝との比較） |
 
 > **IMPORTANT: 総投票額の下限は当日データ用に 0.4億円へ変更しています**
 > 学習データ（JV-Link 履歴 `0B41`）と当日データ（速報 `0B31`）で `hyosu_total` の
@@ -166,7 +171,9 @@ schtasks /Create /TN "KeibaAI Daily" /SC WEEKLY /D SAT,SUN /ST 08:30 `
 ## 3. 日次実行（main.py）
 
 ```powershell
-.venv\Scripts\python.exe main.py            # .env の BUYING_MODE に従って購入
+.venv\Scripts\python.exe main.py            # 単勝・複勝の両方。.env の BUYING_MODE に従って購入
+.venv\Scripts\python.exe main.py --win      # 単勝モデルだけ
+.venv\Scripts\python.exe main.py --place    # 複勝モデルだけ
 .venv\Scripts\python.exe main.py --paper    # ブラウザを開かずに購入判定と台帳記録だけ行う
 .venv\Scripts\python.exe main.py --no-buy   # 予測 CSV の出力まで（購入処理を呼ばない）
 .venv\Scripts\python.exe main.py --live     # BUYING_MODE=live のときの実購入（明示が必須）
@@ -175,6 +182,9 @@ schtasks /Create /TN "KeibaAI Daily" /SC WEEKLY /D SAT,SUN /ST 08:30 `
 
 | オプション | 意味 |
 | --- | --- |
+| `--win` / `--place` | 実行するモデル。どちらも付けなければ両方。予測・購入・再学習のすべてに効く |
+| `--place-min-ev X` | 複勝の EV しきい値（既定: `config.yaml` の `place_strategy.min_ev`。通常 1.05） |
+| `--place-model-dir DIR` | `data/model` 配下の複勝モデルフォルダ（既定: `place`） |
 | `--no-buy` / `--paper` / `--live` | 購入の扱い（同時指定不可）。指定なしは `.env` の `BUYING_MODE`。`BUYING_MODE=live` なのに `--live` が無い場合は起動時に停止する |
 | `--no-retrain` / `--retrain-only` | 再学習をしない / 再学習だけ行う |
 | `--retrain-start-period YYYYMM` | 再学習の開始年月（既定: `config.yaml` の値） |
@@ -209,6 +219,8 @@ schtasks /Create /TN "KeibaAI Daily" /SC WEEKLY /D SAT,SUN /ST 08:30 `
 | `data/processed/realtime_odds/YYYYMMDD/YYYYMMDD_scheduler_events.csv` | 各取得時点の**実行記録**（取得時刻・鮮度・状態）。購入時の安全審査にも使う | オッズ取得 |
 | `output/simulator/YYYYMMDD_all.csv` | 全馬の予測（予測確率・2mオッズ・ドリフト・総投票額・EV・賭け金・**どのフィルタで外れたか**） | 予測 |
 | `output/simulator/YYYYMMDD_bets.csv` | 推奨買い目だけ | 予測 |
+| `output/simulator/YYYYMMDD_place_all.csv` / `_place_bets.csv` | 複勝の全馬予測（予測複勝率・複勝オッズ min/max・EV・見送り理由）/ 推奨のみ | 予測（複勝） |
+| `data/model/place/place_model_seed{0..4}.txt` ほか | 複勝モデル（5シード）・校正器（`.npz`）・メタ（`place_model_meta.json`） | 再学習（複勝） |
 | `data/processed/buying/buying_ledger.sqlite3` | 購入台帳（同じ買い目の二重購入を防ぐ） | 購入 |
 | `data/processed/buying/logs/YYYYMMDD_buying.jsonl` | 購入の監査ログ（安全審査で見送った理由を含む。認証情報はマスク） | 購入 |
 | `data/model/win/win_anaba.txt` ほか2ファイル | 学習済みモデル・確率校正器・運用パラメータ | 再学習 |
@@ -234,6 +246,13 @@ schtasks /Create /TN "KeibaAI Daily" /SC WEEKLY /D SAT,SUN /ST 08:30 `
 
 # 再学習
 .venv\Scripts\python.exe -m src.simulator.retrain --start-period 202401 --end-period 202609
+
+# 複勝: 当日予測 / 再学習
+.venv\Scripts\python.exe -m src.simulator.predict_place --date 2026-09-20
+.venv\Scripts\python.exe -m src.simulator.place_model --start-period 202401 --end-period 202607
+
+# 複勝の推奨 CSV で購入計画を検証
+.venv\Scripts\python.exe -m src.buying.cli paper --date 2026-09-20 --bet-type place --bets-csv output\simulator\20260920_place_bets.csv
 
 # 購入システムの診断・購入計画の検証・成立不明の確認
 .venv\Scripts\python.exe -m src.buying.cli doctor
@@ -268,6 +287,9 @@ KeibaAI_Main/
 │   │   ├── realtime_loader.py   当日のレース別オッズ CSV から 60m〜5m・2m を読む
 │   │   ├── predict_today.py     予測 → 購入条件の判定 → 推奨 CSV（見送り理由つき）
 │   │   ├── retrain.py           過去データで LightGBM を再学習し、確率を校正して保存
+│   │   ├── place_model.py       複勝モデル（5シード LightGBM + isotonic）の学習・保存・予測
+│   │   ├── place_strategy.py    複勝の購入条件（複勝EV・複勝オッズ帯・ドリフト・1レース3点）
+│   │   ├── predict_place.py     複勝の当日予測 → 推奨 CSV
 │   │   ├── artifacts.py         モデルと運用パラメータ（特徴量列・学習時点）の保存・検証
 │   │   ├── odds_series_loader.py  学習用の月別締切前オッズの読込・票数逆算
 │   │   └── dataset.py           着順（学習ラベル）の読込
@@ -324,6 +346,27 @@ KeibaAI_Main/
 - 確率は isotonic で校正済みで、予測値をそのまま勝率として読めます（実測で予測0.08%の馬は実際に0.07%、予測32.3%の馬は31.9%勝ちました）。`EV = 確率 × オッズ` はこの校正を前提にしており、校正器が無いと予測は停止します。
 - 特徴量の定義を変えると、保存済みモデルとの不一致を検出して予測を停止します。その場合は再学習してください。
 - 全馬の予測 CSV には、各馬が**どのフィルタで外れたか**が `skip_reason` 列に残ります（複数該当時は `pool_below_min|ev_below_threshold` のように連結）。
+
+### 7.0 複勝モデル
+
+> **発走直前に、複勝オッズ（min側）6〜20倍で、期待値1.05以上、直前に単勝オッズが下がった馬を複勝で買う。**
+
+| 項目 | 内容 |
+| --- | --- |
+| 特徴量 | 単勝モデルと同じ22列（市場スナップショットのみ） |
+| ラベル | 複勝圏に入ったか。**7頭以下は2着まで・8頭以上は3着まで**（着順と出走頭数から作る。払戻データが無いため） |
+| モデル | LightGBM 二値分類を**5シード**独立に学習し、各シードを isotonic で校正して平均 |
+| 学習 | 既定 2024年1月以降（`pipeline.place_retrain_start_period`）。期間末尾20%を holdout にして early stopping と校正に使う |
+| 買う馬（全条件） | ① `複勝EV = 予測複勝率 × 複勝オッズ(min側) ≥ 1.05`<br>② 複勝オッズ(min側)が **6倍以上20倍以下**<br>③ `log(単勝2m / 単勝5m) ≤ -0.05` |
+| 1レースの点数 | 期待値の高い順に**最大3点** |
+| 賭け金 | Flat 100円 |
+
+- 期待値は必ず複勝オッズの **min 側**で計算します（締切前は配当の幅しか確定しないため。保守側）。
+- 複勝オッズは、単勝の判断に使った時点と同じ時点（通常 2m）の値を使います。複勝オッズが無い馬は `place_odds_missing` で見送ります。
+- 購入条件は `config.yaml` の `place_strategy` で変更できます。
+- 単勝と複勝の購入は1回のログインでまとめて行い、券種ごとに確認画面まで進めます。`BUYING_MAX_RACE_YEN` は同じレースの単勝・複勝の**合計**で判定します。
+- 複勝を買うには `.env` で `BUYING_ALLOWED_BET_TYPES` に `place` を含め、`BUYING_MAX_BETS_PER_RACE` を **3 以上**にしてください。1 のままだと複勝の推奨が2点以上のレースは減額せずレースごと見送られます（起動時に WARNING が出ます）。
+- **レポートの成績（回収率 140.43% CV / 144.54% 真のOOS、95%CI 下側 107〜113%）は1分前判断の数字です。** 本実装は単勝と同じ2分前判断で、この構成での成績は未検証です。
 
 ### 7.1 レポートの検証構成との差分
 

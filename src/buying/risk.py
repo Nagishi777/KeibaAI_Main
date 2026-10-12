@@ -24,6 +24,7 @@ class RiskGate:
         account_balance_yen: int | None,
         committed_day_yen: int,
         committed_session_yen: int,
+        committed_race_yen: int = 0,
     ) -> RiskDecision:
         reasons: list[str] = []
         if self.settings.kill_switch:
@@ -36,7 +37,8 @@ class RiskGate:
         if len(intents) > self.settings.max_bets_per_race:
             reasons.append("max_bets_per_race")
         total = sum(intent.amount_yen for intent in intents)
-        if total > self.settings.max_race_yen:
+        # 同じレースで別券種を既に処理していれば、その金額も1レース上限に数える
+        if committed_race_yen + total > self.settings.max_race_yen:
             reasons.append("max_race_yen")
         if committed_day_yen + total > self.settings.max_day_yen:
             reasons.append("max_day_yen")
@@ -44,6 +46,8 @@ class RiskGate:
             reasons.append("max_session_yen")
         if account_balance_yen is not None and total > account_balance_yen:
             reasons.append("insufficient_balance")
+        if len({intent.bet_type for intent in intents}) > 1:
+            reasons.append("mixed_bet_types")
         for intent in intents:
             if intent.bet_type.value not in self.settings.allowed_bet_types:
                 reasons.append(f"bet_type_not_allowed:{intent.bet_type.value}")
@@ -52,7 +56,7 @@ class RiskGate:
             if not self.settings.min_bet_yen <= intent.amount_yen <= self.settings.max_bet_yen:
                 reasons.append("bet_amount_out_of_range")
             if len(intent.selection) != 1 or not 1 <= intent.selection[0] <= 18:
-                reasons.append("invalid_win_selection")
+                reasons.append(f"invalid_{intent.bet_type.value}_selection")
 
         race_clock = RaceClock(
             now=now,

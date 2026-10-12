@@ -5,9 +5,16 @@
     [2] 発走時刻に合わせて 60m〜10s の各時点で JV-Link からオッズ・票数を取得する
         → data/processed/realtime_odds/YYYYMMDD/{race_id}_{券種}_realtimeodds.csv
     [3] 各レースの 2m 時点が保存されたら、そのレースを予測し購入処理を行う
-        → output/simulator/YYYYMMDD_{all,bets}.csv / src.buying の台帳・監査ログ
+        単勝 → output/simulator/YYYYMMDD_{all,bets}.csv
+        複勝 → output/simulator/YYYYMMDD_place_{all,bets}.csv
+        購入 → src.buying の台帳・監査ログ（単勝・複勝をまとめて1回ログイン）
     [4] 全レース終了後（最終レース発走 + 待機時間）にモデルを再学習する
-        → data/model/win/win_anaba*.{txt,pkl,json}
+        単勝 → data/model/win/win_anaba*.{txt,pkl,json}
+        複勝 → data/model/place/place_model_seed*.txt ほか
+
+単勝（``--win``）・複勝（``--place``）のどちらを動かすかは
+:class:`PipelineOptions` の ``run_win`` / ``run_place`` で選ぶ（既定は両方）。
+片方のモデルが使えない・予測に失敗した場合も、もう片方は動き続ける。
 
 スレッド構成::
 
@@ -46,7 +53,8 @@ from src.buying.ledger import Ledger
 from src.buying.process_lock import ProcessLock
 from src.buying.service import PurchaseService
 from src.buying.snapshot_reader import SnapshotReader
-from src.buying.strategy import SimulatorStrategy, StrategyResult
+from src.buying.domain import BetType
+from src.buying.strategy import SimulatorStrategy, StrategyResult, combine_results
 from src.cli_common import load_config, load_features_config
 from src.scraping.realtime_odds import (
     CSV_LOCK,
@@ -60,8 +68,17 @@ from src.simulator.artifacts import (
     resolve_model_path,
 )
 from src.simulator.features import LIVE_DECISION_SNAPSHOT
+from src.simulator.place_model import (
+    DEFAULT_START_PERIOD as DEFAULT_PLACE_RETRAIN_START_PERIOD,
+    PlaceModel,
+    load_meta as load_place_meta,
+    resolve_model_dir as resolve_place_model_dir,
+    run_place_retrain,
+)
+from src.simulator.place_strategy import place_rule_from_config
+from src.simulator.predict_place import predict_place_from_snapshots
 from src.simulator.predict_today import predict_from_snapshots
-from src.simulator.realtime_loader import load_today_snapshots
+from src.simulator.realtime_loader import load_today_place_odds, load_today_snapshots
 from src.simulator.retrain import run_retrain
 
 logger = logging.getLogger(__name__)
@@ -92,6 +109,11 @@ class PipelineOptions:
     env_path: Path = Path('src/buying/.env')
     model_filename: Optional[str] = None
     min_ev: Optional[float] = None
+    # どのモデルを動かすか（main.py の --win / --place。既定は両方）
+    run_win: bool = True
+    run_place: bool = True
+    place_model_dir: Optional[str] = None
+    place_min_ev: Optional[float] = None
     buy: bool = True
     paper: bool = False
     live: bool = False
@@ -110,8 +132,8 @@ class PipelineReport:
     target_date: str
     started_at: str
     buying_mode: str = 'disabled'
-    model_ready: bool = False
-    model_error: str = ''
+    # 券種ごとのモデル状態 {'win': {'ready': bool, 'error': str}, 'place': {...}}
+    models: dict[str, dict[str, Any]] = field(default_factory=dict)
     n_races: int = 0
     first_post: str = ''
     last_post: str = ''
@@ -184,6 +206,15 @@ def check_model(config: dict, model_filename: str) -> Optional[str]:
     return None
 
 
+def check_place_model(config: dict, model_subdir: Optional[str]) -> Optional[str]:
+    """複勝モデル一式が揃っているか確認する（問題があればその内容）。"""
+    try:
+        load_place_meta(resolve_place_model_dir(config, model_subdir))
+    except (FileNotFoundError, ValueError) as exc:
+        return str(exc)
+    return None
+
+
 def decision_race_ids(events: list[dict[str, object]]) -> list[str]:
     """取得イベントから、判断時点（2m）が保存されたレースを取り出す。"""
     race_ids: list[str] = []
@@ -232,7 +263,11 @@ class BuyingPurchaser:
 
 
 class DecisionEngine:
-    """2m が保存されたレースを予測し、推奨を購入処理へ渡す。"""
+    """2m が保存されたレースを単勝・複勝それぞれ予測し、推奨を購入処理へ渡す。
+
+    ``model_filename`` が None なら単勝を、``place`` が False なら複勝を動かさない。
+    片方の予測が失敗しても、もう片方の購入は行う。
+    """
 
     def __init__(
         self,
@@ -240,8 +275,11 @@ class DecisionEngine:
         *,
         target_date: dt.date,
         realtime_dir: Path,
-        model_filename: str,
+        model_filename: Optional[str],
         min_ev: Optional[float] = None,
+        place: bool = False,
+        place_model_dir: Optional[str] = None,
+        place_min_ev: Optional[float] = None,
         output_dir: Optional[Path] = None,
         purchaser: Optional[BuyingPurchaser] = None,
     ) -> None:
@@ -250,20 +288,16 @@ class DecisionEngine:
         self.realtime_dir = Path(realtime_dir)
         self.model_filename = model_filename
         self.min_ev = min_ev
+        self.place = place
+        self.place_model_dir = place_model_dir
+        self.place_min_ev = place_min_ev
         self.output_dir = output_dir
         self.purchaser = purchaser
         self.strategy = SimulatorStrategy(bet_unit_yen=100)
+        self.place_strategy = SimulatorStrategy(bet_unit_yen=100, bet_type=BetType.PLACE)
+        self._place_model: Optional[PlaceModel] = None
 
-    def decide(self, race_ids: list[str]) -> dict[str, Any]:
-        """指定レースを予測し、購入処理まで行って結果を返す。"""
-        record: dict[str, Any] = {
-            'race_ids': list(race_ids),
-            'started_at': _now_jst_naive().isoformat(timespec='seconds'),
-        }
-        with CSV_LOCK:
-            raw = load_today_snapshots(
-                self.target_date, self.realtime_dir, race_ids=race_ids
-            )
+    def _predict_win(self, raw: Any, record: dict[str, Any]) -> StrategyResult:
         summary, frame = predict_from_snapshots(
             self.config,
             raw,
@@ -273,19 +307,95 @@ class DecisionEngine:
             output_dir=self.output_dir,
             merge_existing=True,
         )
-        record['prediction'] = {
+        record['predictions']['win'] = {
             'n_races': summary.n_races_total,
             'n_races_passed_pool': summary.n_races_passed,
             'n_horses': summary.n_horses,
             'n_bets': summary.n_bets,
             'total_bet_yen': summary.total_bet,
         }
-        result = self.strategy.from_frame(
+        return self.strategy.from_frame(frame, target_date=self.target_date, summary=summary)
+
+    def _predict_place(self, raw: Any, place_odds: Any, record: dict[str, Any]) -> StrategyResult:
+        if self._place_model is None:
+            self._place_model = PlaceModel.load(
+                resolve_place_model_dir(self.config, self.place_model_dir)
+            )
+        summary, frame = predict_place_from_snapshots(
+            self.config,
+            raw,
+            target_date=self.target_date,
+            realtime_dir=self.realtime_dir,
+            min_ev=self.place_min_ev,
+            output_dir=self.output_dir,
+            merge_existing=True,
+            model=self._place_model,
+            place_odds=place_odds,
+        )
+        record['predictions']['place'] = {
+            'n_races': summary.n_races_total,
+            'n_horses': summary.n_horses,
+            'n_bets': summary.n_bets,
+            'total_bet_yen': summary.total_bet,
+        }
+        return self.place_strategy.from_frame(
             frame, target_date=self.target_date, summary=summary
         )
+
+    def decide(self, race_ids: list[str]) -> dict[str, Any]:
+        """指定レースを予測し、購入処理まで行って結果を返す。"""
+        record: dict[str, Any] = {
+            'race_ids': list(race_ids),
+            'started_at': _now_jst_naive().isoformat(timespec='seconds'),
+            'predictions': {},
+        }
+        place_odds: Any = None
+        with CSV_LOCK:
+            raw = load_today_snapshots(
+                self.target_date, self.realtime_dir, race_ids=race_ids
+            )
+            if self.place:
+                try:
+                    place_odds = load_today_place_odds(
+                        self.target_date, self.realtime_dir,
+                        raw.groupby('race_id')['decision_snapshot_used'].first()
+                        .astype(str).to_dict(),
+                    )
+                except Exception as exc:
+                    # 複勝 CSV が読めなくても単勝の判断は続ける
+                    place_odds = exc
+
+        def place_step() -> StrategyResult:
+            if isinstance(place_odds, Exception):
+                raise place_odds
+            return self._predict_place(raw, place_odds, record)
+
+        steps: list[tuple[str, Callable[[], StrategyResult]]] = []
+        if self.model_filename is not None:
+            steps.append(('win', lambda: self._predict_win(raw, record)))
+        if self.place:
+            steps.append(('place', place_step))
+        results: list[StrategyResult] = []
+        errors: dict[str, str] = {}
+        for name, step in steps:
+            try:
+                results.append(step())
+            except Exception as exc:
+                # 片方の券種の失敗で、もう片方の購入まで止めない
+                logger.exception('%s の予測でエラーが発生しました（他の券種は続行します）', name)
+                errors[name] = f'{type(exc).__name__}: {exc}'
+        if errors:
+            record['prediction_errors'] = errors
+        if not results:
+            raise RuntimeError(
+                '; '.join(f'{k}: {v}' for k, v in errors.items()) or '予測する券種がありません'
+            )
+
+        result = combine_results(results, target_date=self.target_date)
         record['intents'] = [
             {
                 'race_id': intent.race_id,
+                'bet_type': intent.bet_type.value,
                 'horse_number': intent.selection[0],
                 'amount_yen': intent.amount_yen,
                 'expected_odds': intent.expected_odds,
@@ -302,9 +412,12 @@ class DecisionEngine:
                 logger.exception('購入処理が失敗しました（予測結果は保持します）')
                 record['purchase_error'] = f'{type(exc).__name__}: {exc}'
         record['finished_at'] = _now_jst_naive().isoformat(timespec='seconds')
+        n_by_type = {
+            name: info.get('n_bets', 0) for name, info in record['predictions'].items()
+        }
         logger.warning(
-            '判断完了 %s: 推奨 %d 点 / 購入指示 %d 件 / 購入結果 %s',
-            ','.join(race_ids), summary.n_bets, len(result.intents),
+            '判断完了 %s: 推奨 %s / 購入指示 %d 件 / 購入結果 %s',
+            ','.join(race_ids), n_by_type, len(result.intents),
             record.get('purchase') or record.get('purchase_error') or '購入なし',
         )
         return record
@@ -425,6 +538,27 @@ def run_retrain_step(
     return asdict(result)
 
 
+def run_place_retrain_step(
+    config: dict,
+    *,
+    target_date: dt.date,
+    start_period: str,
+    model_subdir: Optional[str],
+) -> dict[str, Any]:
+    """複勝モデルを学習開始月〜対象日の月で再学習する。"""
+    end_period = f'{target_date:%Y%m}'
+    logger.warning('[複勝] 再学習を開始します: %s 〜 %s', start_period, end_period)
+    result = run_place_retrain(
+        config, start_period=start_period, end_period=end_period, model_subdir=model_subdir,
+    )
+    logger.warning(
+        '[複勝] 再学習完了: %s（学習期間 %s〜%s / %s レース / アンサンブル holdout AUC %.4f）',
+        result.model_dir, result.train_start, result.train_end,
+        f'{result.n_races:,}', result.ensemble_auc,
+    )
+    return asdict(result)
+
+
 class DailyPipeline:
     """[1]〜[4] を順に実行する。"""
 
@@ -444,10 +578,20 @@ class DailyPipeline:
             or pipeline_cfg.get('model_filename')
             or DEFAULT_MODEL_FILENAME
         )
+        if not (options.run_win or options.run_place):
+            raise ConfigurationError('単勝・複勝のどちらも実行しない設定になっています')
+        self.place_model_dir = (
+            options.place_model_dir or pipeline_cfg.get('place_model_dir') or None
+        )
         self.retrain_start_period = str(
             options.retrain_start_period
             or pipeline_cfg.get('retrain_start_period')
             or DEFAULT_RETRAIN_START_PERIOD
+        )
+        self.place_retrain_start_period = str(
+            options.retrain_start_period
+            or pipeline_cfg.get('place_retrain_start_period')
+            or DEFAULT_PLACE_RETRAIN_START_PERIOD
         )
         self.retrain_delay = dt.timedelta(minutes=float(
             options.retrain_delay_minutes
@@ -489,18 +633,17 @@ class DailyPipeline:
         schedule_dir = settings.schedule_dir
         realtime_dir = settings.odds_dir
 
-        model_error = check_model(self.config, self.model_filename)
-        self.report.model_ready = model_error is None
-        if model_error is not None:
-            self.report.model_error = model_error
+        ready = self._check_models()
+        if not ready:
             logger.error(
-                'モデルが使えないため、本日は予測・購入を行わずオッズ取得と再学習のみ行います: %s',
-                model_error,
+                '使えるモデルが無いため、本日は予測・購入を行わずオッズ取得と再学習のみ行います'
             )
+        if self.options.buy and 'place' in ready:
+            self._warn_place_buying_limits(settings)
 
         with ExitStack() as stack:
             purchaser: Optional[BuyingPurchaser] = None
-            if self.options.buy and model_error is None:
+            if self.options.buy and ready:
                 stack.enter_context(
                     ProcessLock(settings.data_dir / f'{settings.account_alias}.lock')
                 )
@@ -521,13 +664,16 @@ class DailyPipeline:
 
             # [3] 判断スレッド
             worker: Optional[RaceDecisionWorker] = None
-            if model_error is None:
+            if ready:
                 engine = DecisionEngine(
                     self.config,
                     target_date=self.target_date,
                     realtime_dir=realtime_dir,
-                    model_filename=self.model_filename,
+                    model_filename=self.model_filename if 'win' in ready else None,
                     min_ev=self.options.min_ev,
+                    place='place' in ready,
+                    place_model_dir=self.place_model_dir,
+                    place_min_ev=self.options.place_min_ev,
                     output_dir=self.output_root / 'simulator',
                     purchaser=purchaser,
                 )
@@ -571,23 +717,79 @@ class DailyPipeline:
                            wait_until.strftime('%H:%M'),
                            int(self.retrain_delay.total_seconds() // 60))
             sleep_until(wait_until)
-        try:
-            self.report.retrain = run_retrain_step(
+        steps: list[tuple[str, Callable[[], dict[str, Any]]]] = []
+        if self.options.run_win:
+            steps.append(('win', lambda: run_retrain_step(
                 self.config,
                 target_date=self.target_date,
                 start_period=self.retrain_start_period,
                 model_filename=self.model_filename,
-            )
-        except Exception as exc:
-            logger.exception('再学習に失敗しました（既存のモデルはそのまま残ります）')
-            self.report.retrain = {'error': f'{type(exc).__name__}: {exc}'}
-            self.report.errors.append(f'retrain: {exc}')
-            return EXIT_ERROR
-        return self._exit_code()
+            )))
+        if self.options.run_place:
+            steps.append(('place', lambda: run_place_retrain_step(
+                self.config,
+                target_date=self.target_date,
+                start_period=self.place_retrain_start_period,
+                model_subdir=self.place_model_dir,
+            )))
+        failed = False
+        for name, step in steps:
+            try:
+                self.report.retrain[name] = step()
+            except Exception as exc:
+                # 片方が失敗してももう片方は学習する。既存のモデルはそのまま残る。
+                logger.exception('%s の再学習に失敗しました（既存のモデルはそのまま残ります）', name)
+                self.report.retrain[name] = {'error': f'{type(exc).__name__}: {exc}'}
+                self.report.errors.append(f'retrain {name}: {exc}')
+                failed = True
+        self._save_report()
+        return EXIT_ERROR if failed else self._exit_code()
 
     # ------------------------------------------------------------------
     # 補助
     # ------------------------------------------------------------------
+
+    def _check_models(self) -> set[str]:
+        """実行する券種のモデルを確認し、使える券種の集合を返す。"""
+        checks: dict[str, Callable[[], Optional[str]]] = {}
+        if self.options.run_win:
+            checks['win'] = lambda: check_model(self.config, self.model_filename)
+        if self.options.run_place:
+            checks['place'] = lambda: check_place_model(self.config, self.place_model_dir)
+        ready: set[str] = set()
+        for name, check in checks.items():
+            error = check()
+            self.report.models[name] = {'ready': error is None, 'error': error or ''}
+            if error is None:
+                ready.add(name)
+            else:
+                logger.error('%s モデルが使えないため、本日の %s の予測・購入は行いません: %s',
+                             name, name, error)
+        logger.warning('本日実行する券種: %s', ', '.join(sorted(ready)) or 'なし')
+        return ready
+
+    def _warn_place_buying_limits(self, settings: BuyingSettings) -> None:
+        """複勝の購入が .env の上限で弾かれる設定なら、起動時に知らせる。"""
+        rule, _ = place_rule_from_config(self.config, min_ev=self.options.place_min_ev)
+        if BetType.PLACE.value not in settings.allowed_bet_types:
+            logger.error(
+                'BUYING_ALLOWED_BET_TYPES に place がありません（現在 %s）。'
+                ' 複勝は予測・記録のみで、購入は全て bet_type_not_allowed で見送られます。',
+                ','.join(sorted(settings.allowed_bet_types)),
+            )
+        if settings.max_bets_per_race < rule.max_bets_per_race:
+            logger.warning(
+                '複勝は1レース最大%d点ですが BUYING_MAX_BETS_PER_RACE=%d です。'
+                ' 複勝の推奨が%d点を超えたレースは、減額せずレースごと見送られます。',
+                rule.max_bets_per_race, settings.max_bets_per_race, settings.max_bets_per_race,
+            )
+        need_yen = int(rule.max_bets_per_race * rule.stake_yen)
+        if settings.max_race_yen < need_yen:
+            logger.warning(
+                '複勝の1レース最大額 %d円 に対し BUYING_MAX_RACE_YEN=%d円 です'
+                '（単勝と同じレースで買う場合は合算で判定します）。',
+                need_yen, settings.max_race_yen,
+            )
 
     def _buying_settings(self) -> BuyingSettings:
         """購入設定を読み、実行モードを確定する（問題があれば起動時に止める）。"""
@@ -639,6 +841,9 @@ class DailyPipeline:
             races = ','.join(record.get('race_ids', []))
             if 'error' in record:
                 self.report.errors.append(f"decision {races}: {record['error']}")
+            else:
+                for name, error in record.get('prediction_errors', {}).items():
+                    self.report.errors.append(f'decision {name} {races}: {error}')
             for error in record.get('purchase', {}).get('errors', []):
                 self.report.errors.append(f'purchase {races}: {error}')
         self._save_report()

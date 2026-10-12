@@ -22,9 +22,11 @@ class IpatClient(Protocol):
 
     def get_balance_yen(self) -> int | None: ...
 
-    def prepare_win_bets(
+    def prepare_bets(
         self, race: RaceInfo, intents: tuple[BetIntent, ...]
-    ) -> PreparedPurchase: ...
+    ) -> PreparedPurchase:
+        """単勝または複勝（1回の呼び出しは1券種）を確認画面まで進める。"""
+        ...
 
     def cancel_prepared(self, prepared: PreparedPurchase) -> None: ...
 

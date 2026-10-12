@@ -80,6 +80,9 @@ logger = logging.getLogger(__name__)
 BET_TYPE = 'win'
 TARGET_COL = 'target_win'
 
+# 出走頭数（取消・除外を除く）。複勝モデルのラベル作成に使う（特徴量ではない）。
+N_STARTERS_COL = 'n_starters'
+
 # ``1m`` が実質的に更新される最初の年月。これより前は学習に使えない。
 MIN_RELIABLE_PERIOD: str = '202301'
 
@@ -165,7 +168,13 @@ def load_training_data(
     work['race_id'] = work['race_id'].astype('int64')
     parsed_data_dir = Path(data_cfg.get('parsed_data_dir', 'data/processed'))
     horses = load_finish_positions(parsed_data_dir, work['race_id'])
+    # 出走頭数（取消・除外を除く）。複勝の払戻対象（7頭以下は2着まで）の判定に使う。
+    starters = (
+        horses[horses['finish_position'] > 0].groupby('race_id').size()
+        .rename(N_STARTERS_COL)
+    )
     work = work.merge(horses, on=['race_id', 'horse_number'], how='left')
+    work = work.merge(starters, left_on='race_id', right_index=True, how='left')
 
     missing = int(work['finish_position'].isna().sum())
     if missing:

@@ -23,7 +23,7 @@ from src.buying.audit import AuditLogger
 from src.buying.browser.playwright_client import PlaywrightIpatClient
 from src.buying.clock import JST, now_jst
 from src.buying.config import BuyingSettings, ConfigurationError, load_settings
-from src.buying.domain import BuyingMode
+from src.buying.domain import BetType, BuyingMode
 from src.buying.ledger import Ledger
 from src.buying.process_lock import ProcessLock
 from src.buying.service import PurchaseService
@@ -85,6 +85,10 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--date", default=None, help="対象日 YYYY-MM-DD（省略時はJST当日）")
     parser.add_argument("--bets-csv", type=Path, default=None, help="生成済み *_bets.csv")
     parser.add_argument("--simulator-config", type=Path, default=Path("config/config.yaml"))
+    parser.add_argument(
+        "--bet-type", choices=("win", "place"), default="win",
+        help="券種（win=単勝 / place=複勝。place の --model-filename は data/model 配下のフォルダ）",
+    )
     parser.add_argument("--model-filename", default=None)
     parser.add_argument("--min-ev", type=float, default=None)
     parser.add_argument("--fetch", action="store_true", help="シミュレータの取得処理も呼ぶ")
@@ -106,7 +110,7 @@ def _settings_for_command(args: argparse.Namespace) -> BuyingSettings:
 
 
 def _strategy(args: argparse.Namespace, settings: BuyingSettings, target_date: dt.date) -> StrategyResult:
-    strategy = SimulatorStrategy(bet_unit_yen=100)
+    strategy = SimulatorStrategy(bet_unit_yen=100, bet_type=BetType(args.bet_type))
     if args.bets_csv is not None:
         return strategy.from_csv(args.bets_csv, target_date=target_date)
     return strategy.run(

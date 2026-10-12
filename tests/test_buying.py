@@ -105,7 +105,7 @@ class FakeBrowser:
     def get_balance_yen(self) -> int:
         return 10_000
 
-    def prepare_win_bets(self, race_info: RaceInfo, intents: tuple[BetIntent, ...]) -> PreparedPurchase:
+    def prepare_bets(self, race_info: RaceInfo, intents: tuple[BetIntent, ...]) -> PreparedPurchase:
         return PreparedPurchase(
             token="token",
             race_id=race_info.race_id,
